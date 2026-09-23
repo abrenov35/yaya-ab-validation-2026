@@ -7,6 +7,17 @@
   <style>html{background:#f4f6f8}body{margin:0;background:#f4f6f8;color:#162d49;font-family:Arial,sans-serif}#yaya-startup{min-height:100vh;display:grid;place-items:center;text-align:center;font-size:22px;font-weight:800;padding:24px;box-sizing:border-box}</style>
 </head>
 <body>
+<script>
+(function(){
+  const realFetch=window.fetch;
+  window.fetch=function(input,options){
+    const method=String(options&&options.method||'GET').toUpperCase();
+    if(method!=='GET')return Promise.reject(new Error('Version de test en lecture seule : enregistrement désactivé'));
+    return realFetch.apply(this,arguments);
+  };
+})();
+</script>
+
 <div id="yaya-startup">Chargement de Yaya…<br><small style="font-size:14px;font-weight:500;margin-top:12px;display:block">Connexion aux données en cours.</small></div>
 <script>
 (async()=>{
