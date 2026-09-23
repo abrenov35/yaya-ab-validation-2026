@@ -1,0 +1,1 @@
+(function(){'use strict';const original=window.fetch;window.fetch=function(input,options){const method=String(options&&options.method||input&&input.method||'GET').toUpperCase();if(method!=='GET')return Promise.reject(new Error('Copie de test en lecture seule : enregistrement désactivé'));return original.apply(this,arguments);};})();
