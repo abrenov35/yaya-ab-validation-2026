@@ -189,6 +189,7 @@
   if(!base.includes(marker))throw new Error('Point insertion aperçu introuvable');
   const nonBlockingReplacement=replacement.replaceAll('<script src="','<script defer src="');
   base=base.replace(marker,nonBlockingReplacement);
+  base=base.replace('<body>','<body><script src="validation-readonly.js"><\\/script>');
   const build=(document.title.match(/Yaya v([\d.]+)/i)||[])[1]||String(Date.now());
   base=base.replace(/(<script\b[^>]*\bsrc=")([^"]+)("[^>]*>)/gi,(whole,start,src,end)=>{if(/^https?:|^\/\//i.test(src))return whole;return start+src+(src.includes('?')?'&':'?')+'_build='+encodeURIComponent(build)+end;});
   document.open();document.write(base);document.close();
