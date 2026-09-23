@@ -4,22 +4,14 @@
   const initialBuild=(new URL(document.currentScript.src,location.href)).searchParams.get('_build')||(document.title.match(/Yaya v([\d.]+)/i)||[])[1]||'';
   let busy=false, lastSuccess=null, versionAvailable=false;
   const style=document.createElement('style');
-  style.textContent='.yaya-refresh-controls{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:8px 0 12px}.yaya-refresh-controls button{min-height:38px;padding:7px 12px;border-radius:8px;border:1px solid #9aabc2;background:#fff;color:#183457;font-weight:700;cursor:pointer}.yaya-refresh-controls button:disabled{opacity:.55;cursor:wait}.yaya-refresh-controls [role=status]{font-size:12px;color:#35506c}.yaya-refresh-controls [data-error]{color:#b42318}.yaya-refresh-controls .yaya-new-version{background:#fff5d6;border-color:#dcae33}';
+  style.textContent='.yaya-refresh-controls{position:fixed;right:12px;bottom:calc(12px + env(safe-area-inset-bottom));z-index:99990;display:flex;align-items:center;gap:8px;flex-wrap:wrap;max-width:min(94vw,430px);padding:7px;border-radius:9px;background:#fff;box-shadow:0 2px 12px #162d4933}.yaya-refresh-controls button{min-height:38px;padding:7px 12px;border-radius:8px;border:1px solid #9aabc2;background:#fff;color:#183457;font-weight:700;cursor:pointer}.yaya-refresh-controls button:disabled{opacity:.55;cursor:wait}.yaya-refresh-controls [role=status]{font-size:12px;color:#35506c}.yaya-refresh-controls [data-error]{color:#b42318}.yaya-refresh-controls .yaya-new-version{background:#fff5d6;border-color:#dcae33}';
   document.head.appendChild(style);
   function controls(){
     let host=document.getElementById('yaya-dashboard-refresh');
-    if(host){
-      if(!host.querySelector('.yaya-refresh-button')){
-        const button=document.createElement('button');button.type='button';button.className='yaya-refresh-button';button.textContent='⟳ Actualiser';
-        host.insertBefore(button,host.firstChild);button.addEventListener('click',refresh);status();
-      }
-      return host;
-    }
-    const pane=document.getElementById('pane-chantiers');
-    if(!pane)return null;
+    if(host)return host;
     host=document.createElement('div');host.id='yaya-dashboard-refresh';host.className='yaya-refresh-controls';
     host.innerHTML='<button type="button" class="yaya-refresh-button">⟳ Actualiser</button><span role="status" aria-live="polite"></span><button type="button" class="yaya-new-version" hidden>Nouvelle version disponible — recharger Yaya</button>';
-    pane.insertBefore(host,pane.firstChild);
+    document.body.appendChild(host);
     host.querySelector('.yaya-refresh-button').addEventListener('click',refresh);
     host.querySelector('.yaya-new-version').addEventListener('click',reloadVersion);
     status();
@@ -78,7 +70,7 @@
     const url=new URL(location.href);url.searchParams.set('_yaya_build',Date.now());
     location.assign(url.href);
   }
-  const observer=new MutationObserver(()=>{const host=document.getElementById('yaya-dashboard-refresh');if(!host||!host.querySelector('.yaya-refresh-button'))controls();});
+  const observer=new MutationObserver(()=>{if(!document.getElementById('yaya-dashboard-refresh'))controls();});
   observer.observe(document.body,{childList:true,subtree:true});
   controls();checkVersion();setInterval(checkVersion,60000);
 })();
