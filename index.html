@@ -185,7 +185,7 @@
     '<script src="viewport-density-optimization.js?v=5"><\\/script>'+
     '<script src="document-unified-viewer.js?v=doc-type-1"><\\/script>'+
     '<script src="toolbar-close-modal.js?v=1"><\\/script>'+
-    '<script src="yaya-unified-v4-viewer.js?v=4"><\\/script>'+"'+reveal+'</body>'";
+    '<script src="yaya-unified-v4-viewer.js?v=5"><\\/script>'+"'+reveal+'</body>'";
   if(!base.includes(marker))throw new Error('Point insertion aperçu introuvable');
   const nonBlockingReplacement=replacement.replaceAll('<script src="','<script defer src="');
   base=base.replace(marker,nonBlockingReplacement);
