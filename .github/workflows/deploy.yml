@@ -61,7 +61,7 @@ jobs:
               )
               guard_path.write_text(guard, encoding='utf-8')
 
-          for filename in ('index.html', 'index-production-base.html', 'index-legacy.html'):
+          for filename in ('index.html', 'public/index.html', 'index-production-base.html', 'index-legacy.html'):
               path = Path(filename)
               if not path.exists():
                   continue
@@ -123,7 +123,7 @@ jobs:
         run: |
           git config user.email "github-actions@github.com"
           git config user.name "GitHub Actions"
-          git add version.txt VERSION.txt index.html index-production-base.html index-legacy.html chantier-write-safety.js
+          git add version.txt VERSION.txt index.html public/index.html index-production-base.html index-legacy.html chantier-write-safety.js
           git commit -m "Bump Yaya visible version" || echo "No change"
           git push
 
