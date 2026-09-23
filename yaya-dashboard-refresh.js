@@ -8,7 +8,13 @@
   document.head.appendChild(style);
   function controls(){
     let host=document.getElementById('yaya-dashboard-refresh');
-    if(host)return host;
+    if(host){
+      if(!host.querySelector('.yaya-refresh-button')){
+        const button=document.createElement('button');button.type='button';button.className='yaya-refresh-button';button.textContent='⟳ Actualiser';
+        host.insertBefore(button,host.firstChild);button.addEventListener('click',refresh);status();
+      }
+      return host;
+    }
     const pane=document.getElementById('pane-chantiers');
     if(!pane)return null;
     host=document.createElement('div');host.id='yaya-dashboard-refresh';host.className='yaya-refresh-controls';
@@ -24,7 +30,7 @@
     const el=host.querySelector('[role=status]');
     el.textContent=message||(lastSuccess?'Dernière actualisation réussie : '+lastSuccess.toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit',second:'2-digit'}):'');
     el.toggleAttribute('data-error',error);
-    host.querySelector('.yaya-refresh-button').disabled=busy;
+    const refreshButton=host.querySelector('.yaya-refresh-button');if(refreshButton)refreshButton.disabled=busy;
     host.querySelector('.yaya-new-version').hidden=!versionAvailable;
   }
   async function refresh(){
@@ -72,7 +78,7 @@
     const url=new URL(location.href);url.searchParams.set('_yaya_build',Date.now());
     location.assign(url.href);
   }
-  const observer=new MutationObserver(()=>{if(!document.getElementById('yaya-dashboard-refresh'))controls();});
+  const observer=new MutationObserver(()=>{const host=document.getElementById('yaya-dashboard-refresh');if(!host||!host.querySelector('.yaya-refresh-button'))controls();});
   observer.observe(document.body,{childList:true,subtree:true});
   controls();checkVersion();setInterval(checkVersion,60000);
 })();
