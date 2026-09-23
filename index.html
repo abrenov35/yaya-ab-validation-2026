@@ -64,7 +64,7 @@
   try{return await window.__yayaApiGetPromise;}finally{window.__yayaApiGetPromise=null;}
 }`;
   const sourceRetry=`  let source=await fetch('index-legacy.html?v=doc-type-1&build='+encodeURIComponent((document.title.match(/Yaya v([\d.]+)/i)||[])[1]||Date.now()),{cache:'no-store'}).then(r=>{if(!r.ok)throw new Error('legacy '+r.status);return r.text();});\n  source=source.replace(/async function apiGet\\(\\)\\{[\\s\\S]*?\\n\\}/,${JSON.stringify(apiGetPatch)});\n  source=source.replaceAll('x=>x.id===id','x=>String(x.id)===String(id)');\n  source=source.replace('    await synchroniserDatesPlanning();\\n    syncMsg("✓ connecté");\\n    render();','    syncMsg("✓ connecté");\\n    render();\\n    ');`;
->>>>>>> f6ff08ef (Add manual dashboard refresh and build update prompt)  if(!base.includes(sourceLoader))throw new Error('Point insertion retry API introuvable');
+  if(!base.includes(sourceLoader))throw new Error('Point insertion retry API introuvable');
   base=base.replace(sourceLoader,sourceRetry);
   const marker="patch+reveal+'</body>'";
   const replacement="patch+'"+
