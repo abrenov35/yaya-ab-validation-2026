@@ -27,10 +27,18 @@ function directDownloadUrl(url){
   }catch(e){return url;}
 }
 function mailBody(d){
-  const raw=d&&(d.contenuMail||d.corpsMail||d.bodyMail||d.mailBody||d.body||d.contenu||d.message||d.titre)||'';
+  const explicit=text(d&&(d.contenuMail||d.corpsMail||d.bodyMail||d.mailBody||d.body||d.contenu||d.message));
+  let raw='';
+  try{if(typeof window.contenuMailYaya==='function')raw=window.contenuMailYaya(d)||'';}catch(e){}
+  raw=raw||explicit||(d&&d.titre)||'';
   if(!raw)return '';
   const holder=document.createElement('div');holder.innerHTML=String(raw);
-  return text(holder.textContent||holder.innerText||raw);
+  const body=text(holder.textContent||holder.innerText||raw);
+  return !explicit&&body===mailSubject(d)?'':body;
+}
+function gmailUrl(d){
+  const url=text(d&&(d.lienGmail||d.gmailUrl||d.lien));
+  try{return new URL(url).hostname==='mail.google.com'?url:'';}catch(e){return '';}
 }
 function mailSubject(d){return text(d&&(d.objetMail||d.mailSubject||d.emailSubject||d.subject||d.objet||d.sujet))||'Mail';}
 function mailSender(d){return text(d&&(d.nomMail||d.expediteur||d.from||d.sender||d.sujet))||'Expéditeur non renseigné';}
@@ -197,8 +205,9 @@ function render(){
     const meta=document.createElement('div');meta.className='v4-mail-meta';
     const from=document.createElement('span');from.textContent=item.sender||'Expéditeur non renseigné';meta.appendChild(from);
     if(item.date){const dt=document.createElement('span');dt.textContent=item.date;meta.appendChild(dt);}
+    if(item.gmailUrl){const link=document.createElement('a');link.href=item.gmailUrl;link.target='_blank';link.rel='noopener noreferrer';link.textContent='Ouvrir dans Gmail';meta.appendChild(link);}
     head.append(subj,meta);
-    const body=document.createElement('div');body.className='v4-mail-body';body.textContent=item.body||'Contenu du mail indisponible.';
+    const body=document.createElement('div');body.className='v4-mail-body';body.textContent=item.body||'Corps du mail absent dans Yaya. Consultez le message original dans Gmail.';
     box.append(head,body);stage.appendChild(box);return;
   }
 
@@ -306,7 +315,7 @@ window.__yayaEditMailAttachmentSafe=editMailAttachmentSafe;
 function mailItems(id){
   const mail=docById(id);if(!mail)return [];
   const items=[{
-    kind:'mail',id:text(mail.id),tab:'📧 Mail',title:mailSubject(mail),sender:mailSender(mail),date:text(mail.date),body:mailBody(mail),
+    kind:'mail',id:text(mail.id),tab:'📧 Mail',title:mailSubject(mail),sender:mailSender(mail),date:text(mail.date),body:mailBody(mail),gmailUrl:gmailUrl(mail),
     onEdit:()=>{if(typeof window.__yayaEditMailSubject==='function')window.__yayaEditMailSubject(text(mail.id));},
     onDelete:()=>{try{if(typeof window.delDocument==='function')window.delDocument(text(mail.id));else if(typeof delDocument==='function')delDocument(text(mail.id));}catch(e){}}
   }];
