@@ -360,7 +360,18 @@ function chantierTab(cid){
   if(state.tab==="photos"){
     var ph=rowsFor("documents",cid).filter(function(d){return typeNorm(d.type)==="photo";});
     if(!ph.length)return '<div class="empty">Aucune photo pour ce chantier.</div>';
-    return ph.map(function(d){return '<div class="doc-row"><div class="doc-type">PHOTO</div><div class="doc-title">'+esc(d.titre||d.sujet||"Photo")+'</div><div class="muted">'+esc(d.sujet||"")+'</div><div class="muted">'+dateFr(d.date)+'</div><div>'+(d.lien?'<button class="doc-link y2-open-doc" type="button" data-doc-url="'+esc(d.lien)+'" data-doc-title="'+esc(d.titre||d.sujet||"Photo")+'">Ouvrir</button>':"—")+'</div></div>';}).join("");
+    ph.sort(function(a,b){return String(b.date||"").localeCompare(String(a.date||""));});
+    var html='<div class="photo-grid">';
+    ph.forEach(function(d){
+      var id=driveIdFromUrl(d.lien||"");
+      var thumb=id?'https://drive.google.com/thumbnail?id='+encodeURIComponent(id)+'&sz=w900':String(d.lien||"");
+      html+='<button class="photo-card y2-open-doc" type="button" data-doc-url="'+esc(d.lien||"")+'" data-doc-title="'+esc(d.sujet||d.titre||"Photo")+'">'
+        +'<div class="photo-thumb-wrap">'+(thumb?'<img class="photo-thumb" src="'+esc(thumb)+'" alt="'+esc(d.sujet||d.titre||"Photo")+'" loading="lazy">':'<div class="photo-thumb-missing">Photo</div>')+'</div>'
+        +'<div class="photo-meta"><strong>'+esc(d.titre||"Titre à définir")+'</strong><span>'+dateFr(d.date)+'</span></div>'
+        +'</button>';
+    });
+    html+='</div>';
+    return html;
   }
   if(state.tab==="devis"){
     var dv=((state.data.DEVIS)||[]).filter(function(d){return String(d["ID chantier"]||"")===String(cid);});
