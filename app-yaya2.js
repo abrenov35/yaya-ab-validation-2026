@@ -2,7 +2,7 @@
 "use strict";
 
 var API="https://script.google.com/macros/s/AKfycbxXBpXjWXEF-7p6vvOE3blSBc8_5e62AtQb2stHjnrGE025cOxQGy-zAguYmN2u9O4K/exec";
-var state={data:null,page:"dashboard",selected:null,tab:"documents",query:"",loadedAt:null,overrides:{}};
+var state={data:null,page:"dashboard",selected:null,tab:"documents",query:"",loadedAt:null,source:"prod",overrides:{}};
 var STATUTS=["Signé","À programmer","En cours","SAV","Attente PV","Facturé","Clos facturé","Archivé"];
 
 function esc(v){return String(v==null?"":v).replace(/[&<>"']/g,function(c){return({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]);});}
@@ -95,12 +95,13 @@ function navBtn(page,label){
 }
 function shell(content,title){
   var loaded=state.loadedAt?state.loadedAt.toLocaleTimeString("fr-FR",{hour:"2-digit",minute:"2-digit"}):"—";
+  var sourceLabel=state.source==="cache"?"Dernières données connues · "+loaded:"Données PROD lues à "+loaded;
   return '<div class="shell">'+
     '<aside class="sidebar"><div class="brand"><div class="brand-mark">AB</div><div><div class="brand-title">Yaya 2</div><div class="brand-sub">AB RENOV 35</div></div></div>'+
     '<nav class="nav">'+
       navBtn("dashboard","Tableau de bord")+navBtn("chantiers","Chantiers")+navBtn("documents","Documents & mails")+navBtn("achats","Achats")+navBtn("charges","Charges")+navBtn("commandes","Commandes")+navBtn("devis","Devis")+navBtn("heures","Heures")+
     '</nav><div class="sidebar-foot"><span class="test-pill">MODE TEST</span><br>Lecture PROD uniquement.<br>Les modifications de cette session ne sont jamais envoyées à Yaya.</div></aside>'+
-    '<main class="main"><header class="topbar"><div class="top-title">'+esc(title||"Yaya 2")+'</div><div class="top-meta"><span class="read-label"><span class="status-dot"></span>Données PROD lues à '+loaded+'</span><button class="btn" data-action="reload">Actualiser</button></div></header><div class="content">'+content+'</div></main>'+
+    '<main class="main"><header class="topbar"><div class="top-title">'+esc(title||"Yaya 2")+'</div><div class="top-meta"><span class="read-label"><span class="status-dot"></span>'+sourceLabel+'</span><button class="btn" data-action="reload">Actualiser</button></div></header><div class="content">'+content+'</div></main>'+
     '<nav class="mobile-nav">'+navBtn("dashboard","Accueil")+navBtn("chantiers","Chantiers")+navBtn("documents","Docs & mails")+navBtn("commandes","Commandes")+navBtn("heures","Heures")+'</nav>'+
   '</div>';
 }
@@ -230,21 +231,86 @@ function bind(){
   var search=document.getElementById("searchChantiers");if(search){search.oninput=function(){state.query=search.value;var pos=search.selectionStart;render();var s=document.getElementById("searchChantiers");if(s){s.focus();try{s.setSelectionRange(pos,pos);}catch(e){}}};}
   document.querySelectorAll("[data-action=status]").forEach(function(s){s.onchange=function(){var id=s.getAttribute("data-id");state.overrides[id]=Object.assign({},state.overrides[id]||{},{statut:s.value});render();};});
 }
-async function load(force){
-  var el=document.getElementById("app");
-  if(force)el.innerHTML='<div class="boot"><div class="boot-mark">AB</div><div><strong>Actualisation Yaya 2</strong><span>Lecture de Yaya PROD…</span></div></div>';
+function normalizeData(data){
+  data=data&&typeof data==="object"?data:{};
+  ["chantiers","achats","commandes","documents","MAILS","DEVIS","heures","salaries"].forEach(function(k){
+    if(!Array.isArray(data[k]))data[k]=[];
+  });
+  return data;
+}
+function readProdCache(){
+  var keys=["YAYA2_PROD_CACHE_V1","YAYA_CACHE_DATA_V2"];
+  for(var i=0;i<keys.length;i++){
+    try{
+      var raw=localStorage.getItem(keys[i]);
+      if(!raw)continue;
+      var parsed=JSON.parse(raw);
+      var data=parsed&&parsed.data?parsed.data:parsed;
+      if(data&&Array.isArray(data.chantiers)&&data.chantiers.length){
+        return {data:normalizeData(data),savedAt:Number(parsed.savedAt)||Date.now()};
+      }
+    }catch(e){}
+  }
+  return null;
+}
+function saveProdCache(data){
   try{
-    var tabs="chantiers,achats,commandes,documents,MAILS,DEVIS,heures,salaries";
-    var url=API+"?tabs="+encodeURIComponent(tabs)+"&_yaya2="+Date.now();
-    var r=await fetch(url,{cache:"no-store"});
+    localStorage.setItem("YAYA2_PROD_CACHE_V1",JSON.stringify({savedAt:Date.now(),data:data}));
+  }catch(e){}
+}
+async function fetchJsonWithTimeout(url,timeout){
+  var ctrl=new AbortController();
+  var timer=setTimeout(function(){try{ctrl.abort();}catch(e){}},timeout);
+  try{
+    var r=await fetch(url,{cache:"no-store",credentials:"omit",signal:ctrl.signal});
     if(!r.ok)throw new Error("HTTP "+r.status);
     var j=await r.json();
     if(!j||j.ok===false)throw new Error(j&&j.error?j.error:"Réponse API invalide");
-    state.data=j.data||j;
-    ["chantiers","achats","commandes","documents","MAILS","DEVIS","heures","salaries"].forEach(function(k){if(!Array.isArray(state.data[k]))state.data[k]=[];});
-    state.loadedAt=new Date();render();
+    return normalizeData(j.data||j);
+  }finally{
+    clearTimeout(timer);
+  }
+}
+async function fetchProdData(){
+  var tabs="chantiers,achats,commandes,documents,MAILS,DEVIS,heures,salaries";
+  var attempts=[
+    API+"?tabs="+encodeURIComponent(tabs)+"&_yaya2="+Date.now(),
+    API+"?_yaya2="+Date.now()+"_full"
+  ];
+  var lastErr=null;
+  for(var i=0;i<attempts.length;i++){
+    try{return await fetchJsonWithTimeout(attempts[i],i===0?9000:14000);}
+    catch(e){lastErr=e;}
+  }
+  throw lastErr||new Error("API Yaya indisponible");
+}
+async function load(force){
+  var el=document.getElementById("app");
+  var cached=!force?readProdCache():null;
+
+  if(cached){
+    state.data=cached.data;
+    state.loadedAt=new Date(cached.savedAt);
+    state.source="cache";
+    render();
+  }else{
+    el.innerHTML='<div class="boot"><div class="boot-mark">AB</div><div><strong>Yaya 2 TEST</strong><span>Lecture des données Yaya en cours…</span></div></div>';
+  }
+
+  try{
+    var fresh=await fetchProdData();
+    state.data=fresh;
+    state.loadedAt=new Date();
+    state.source="prod";
+    saveProdCache(fresh);
+    render();
   }catch(err){
-    el.innerHTML='<div class="error"><h1>Yaya 2 TEST ne peut pas lire les données</h1><p>'+esc(err.message||err)+'</p><p>Aucune écriture n\'a été effectuée dans Yaya PROD.</p><button class="btn primary" onclick="location.reload()">Réessayer</button></div>';
+    if(state.data){
+      state.source="cache";
+      render();
+      return;
+    }
+    el.innerHTML='<div class="error"><h1>Connexion aux données Yaya impossible</h1><p>'+esc(err.name==="AbortError"?"La connexion à Yaya a expiré.":(err.message||err))+'</p><p>Le site TEST n\'écrit rien dans Yaya PROD.</p><button class="btn primary" onclick="location.reload()">Réessayer</button></div>';
   }
 }
 load(false);
