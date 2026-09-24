@@ -76,3 +76,16 @@ tr.clickable{cursor:pointer}tr.clickable:hover td{background:#f8fafb}
   .mobile-nav{position:fixed;display:grid;grid-template-columns:repeat(5,1fr);bottom:0;left:0;right:0;background:#fff;border-top:1px solid var(--line);z-index:30;padding-bottom:env(safe-area-inset-bottom)}
   .mobile-nav button{border:0;background:#fff;color:#657281;padding:11px 3px;font-size:9.5px;font-weight:700}.mobile-nav button.active{color:var(--accent2)}
 }
+.doc-link.y2-open-doc{border:0;background:transparent;padding:0;font:inherit}
+.y2v-overlay{position:fixed;inset:0;z-index:1000;background:#fff;display:flex;align-items:stretch;justify-content:stretch}
+.y2v-modal{width:100vw;height:100dvh;display:flex;flex-direction:column;background:#fff}
+.y2v-head{flex:0 0 auto;min-height:48px;border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between;gap:12px;padding:7px 10px;background:#fff}
+.y2v-title{font-size:13px;font-weight:750;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.y2v-actions{display:flex;gap:8px}
+.y2v-stage{flex:1 1 auto;min-height:0;overflow:auto;background:#e9edf2;padding:10px;-webkit-overflow-scrolling:touch}
+.y2v-loading,.y2v-error{min-height:100%;display:grid;place-items:center;text-align:center;color:var(--muted);font-size:13px;padding:24px;box-sizing:border-box}
+.y2v-pdf-pages{width:100%}
+.y2v-page{width:min(100%,1200px);margin:0 auto 10px;background:#fff;box-shadow:0 1px 5px rgba(15,31,53,.16)}
+.y2v-page canvas{display:block;margin:0 auto}
+.y2v-image{display:block;max-width:100%;max-height:100%;margin:auto;object-fit:contain;background:#fff}
+@media(max-width:640px){.y2v-stage{padding:4px}.y2v-head{min-height:44px;padding:5px 7px}}
