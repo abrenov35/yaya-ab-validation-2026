@@ -124,3 +124,7 @@ tr.clickable{cursor:pointer}tr.clickable:hover td{background:#f8fafb}
 .photo-meta strong{font-size:11.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .photo-meta span{font-size:10.5px;color:var(--muted)}
 @media(max-width:640px){.photo-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:7px;padding:8px}.photo-meta{padding:7px}}
+
+.cmd-status-select{min-width:132px;border:1px solid var(--line);background:#fff;color:var(--ink);border-radius:7px;padding:7px 9px;font-size:11.5px;font-weight:700}
+.cmd-status-select:focus{outline:none;border-color:#9faeba;box-shadow:0 0 0 3px rgba(30,101,115,.08)}
+@media(max-width:640px){.cmd-status-select{min-width:118px;font-size:10.5px;padding:6px 7px}}
