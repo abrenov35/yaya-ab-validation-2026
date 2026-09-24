@@ -2,7 +2,7 @@
 "use strict";
 
 var API="https://script.google.com/macros/s/AKfycbxXBpXjWXEF-7p6vvOE3blSBc8_5e62AtQb2stHjnrGE025cOxQGy-zAguYmN2u9O4K/exec";
-var state={data:null,page:"dashboard",selected:null,tab:"documents",query:"",loadedAt:null,source:"prod",overrides:{}};
+var state={data:null,page:"chantiers",selected:null,tab:"documents",query:"",loadedAt:null,source:"prod",overrides:{}};
 var STATUTS=["Signé","À programmer","En cours","SAV","Attente PV","Facturé","Clos facturé","Archivé"];
 
 function esc(v){return String(v==null?"":v).replace(/[&<>"']/g,function(c){return({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]);});}
@@ -99,10 +99,10 @@ function shell(content,title){
   return '<div class="shell">'+
     '<aside class="sidebar"><div class="brand"><div class="brand-mark">AB</div><div><div class="brand-title">Yaya 2</div><div class="brand-sub">AB RENOV 35</div></div></div>'+
     '<nav class="nav">'+
-      navBtn("dashboard","Tableau de bord")+navBtn("chantiers","Chantiers")+navBtn("documents","Documents & mails")+navBtn("achats","Achats")+navBtn("charges","Charges")+navBtn("commandes","Commandes")+navBtn("devis","Devis")+navBtn("heures","Heures")+
+      navBtn("chantiers","Chantiers")+navBtn("documents","Documents & mails")+navBtn("achats","Achats")+navBtn("charges","Charges")+navBtn("commandes","Commandes")+navBtn("devis","Devis")+navBtn("heures","Heures")+
     '</nav><div class="sidebar-foot"><span class="test-pill">MODE TEST</span><br>Lecture PROD uniquement.<br>Les modifications de cette session ne sont jamais envoyées à Yaya.</div></aside>'+
     '<main class="main"><header class="topbar"><div class="top-title">'+esc(title||"Yaya 2")+'</div><div class="top-meta"><span class="read-label"><span class="status-dot"></span>'+sourceLabel+'</span><button class="btn" data-action="reload">Actualiser</button></div></header><div class="content">'+content+'</div></main>'+
-    '<nav class="mobile-nav">'+navBtn("dashboard","Accueil")+navBtn("chantiers","Chantiers")+navBtn("documents","Docs & mails")+navBtn("commandes","Commandes")+navBtn("heures","Heures")+'</nav>'+
+    '<nav class="mobile-nav">'+navBtn("chantiers","Chantiers")+navBtn("documents","Docs & mails")+navBtn("achats","Achats")+navBtn("commandes","Commandes")+navBtn("heures","Heures")+'</nav>'+
   '</div>';
 }
 function pageHead(title,sub,action){return '<div class="page-head"><div><h1>'+esc(title)+'</h1><p>'+esc(sub||"")+'</p></div>'+(action||"")+'</div>';}
@@ -126,11 +126,33 @@ function dashboard(){
 }
 function chantierList(){
   var q=typeNorm(state.query);
-  var cs=(state.data.chantiers||[]).filter(function(c){return !q||typeNorm((c.nom||"")+" "+(c.id||"")+" "+(c.numero||"")).indexOf(q)>=0;});
+  var all=(state.data.chantiers||[]).slice();
+
+  var recent=all.filter(function(c){return /^C\d+$/.test(String(c.id||""));})
+    .map(function(c){return {chantier:c,activity:recentActivityFor(c.id)};})
+    .filter(function(x){return !!x.activity;})
+    .sort(function(a,b){return b.activity.ts-a.activity.ts;})
+    .slice(0,8);
+
+  var cs=all.filter(function(c){
+    return !q||typeNorm((c.nom||"")+" "+(c.id||"")+" "+(c.numero||"")).indexOf(q)>=0;
+  });
   cs.sort(function(a,b){return String(a.nom||"").localeCompare(String(b.nom||""),"fr");});
-  var html=pageHead("Chantiers","Même base que Yaya PROD. Aucun enregistrement depuis cet écran.",'<input class="search" id="searchChantiers" placeholder="Rechercher un chantier…" value="'+esc(state.query)+'">');
-  html+='<div class="panel"><div class="table-wrap"><table><thead><tr><th>Chantier</th><th>ID</th><th>N°</th><th>Statut</th><th>Démarrage</th><th>Signé le</th><th class="money">CA HT</th><th class="money">Marge</th></tr></thead><tbody>';
-  cs.forEach(function(c){var v=chantierView(c),f=finances(c.id);html+='<tr class="clickable" data-chantier="'+esc(c.id)+'"><td class="strong">'+esc(c.nom)+'</td><td class="muted">'+esc(c.id)+'</td><td>'+esc(c.numero||"—")+'</td><td>'+badgeStatus(v.statut)+'</td><td>'+dateFr(c.dateDemarrage)+'</td><td>'+dateFr(c.dateSignature)+'</td><td class="money">'+eur(f.ca)+'</td><td class="money '+(f.margin>=0?"margin-good":"margin-bad")+'">'+eur(f.margin)+'</td></tr>';});
+
+  var html=pageHead("Chantiers","Accès direct aux dossiers Yaya.",'<input class="search" id="searchChantiers" placeholder="Rechercher un chantier…" value="'+esc(state.query)+'">');
+
+  html+='<div class="panel" style="margin-bottom:16px"><div class="panel-head"><h2>Activité récente</h2><span>Derniers chantiers modifiés</span></div><div class="table-wrap"><table><thead><tr><th>Chantier</th><th>Dernière activité</th><th>Date</th><th class="money">CA HT</th><th class="money">Marge</th></tr></thead><tbody>';
+  recent.forEach(function(x){
+    var c=x.chantier,f=finances(c.id);
+    html+='<tr class="clickable" data-chantier="'+esc(c.id)+'"><td class="strong">'+esc(c.nom)+'</td><td><span class="badge">'+esc(x.activity.label)+'</span></td><td>'+dateFr(new Date(x.activity.ts).toISOString())+'</td><td class="money">'+eur(f.ca)+'</td><td class="money '+(f.margin>=0?"margin-good":"margin-bad")+'">'+eur(f.margin)+'</td></tr>';
+  });
+  html+='</tbody></table></div></div>';
+
+  html+='<div class="panel"><div class="panel-head"><h2>Tous les chantiers</h2><span>'+cs.length+' chantier(s)</span></div><div class="table-wrap"><table><thead><tr><th>Chantier</th><th>N°</th><th>Démarrage</th><th>Signé le</th><th class="money">CA HT</th><th class="money">Marge</th></tr></thead><tbody>';
+  cs.forEach(function(c){
+    var f=finances(c.id);
+    html+='<tr class="clickable" data-chantier="'+esc(c.id)+'"><td class="strong">'+esc(c.nom)+'</td><td>'+esc(c.numero||"—")+'</td><td>'+dateFr(c.dateDemarrage)+'</td><td>'+dateFr(c.dateSignature)+'</td><td class="money">'+eur(f.ca)+'</td><td class="money '+(f.margin>=0?"margin-good":"margin-bad")+'">'+eur(f.margin)+'</td></tr>';
+  });
   html+="</tbody></table></div></div>";
   return shell(html,"Chantiers");
 }
@@ -216,8 +238,7 @@ function genericTablePage(kind){
 }
 function render(){
   var el=document.getElementById("app");if(!state.data)return;
-  if(state.page==="dashboard")el.innerHTML=dashboard();
-  else if(state.page==="chantiers")el.innerHTML=chantierList();
+  if(state.page==="dashboard"||state.page==="chantiers")el.innerHTML=chantierList();
   else if(state.page==="chantier")el.innerHTML=chantierPage();
   else if(state.page==="documents")el.innerHTML=genericDocuments();
   else el.innerHTML=genericTablePage(state.page);
