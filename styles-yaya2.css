@@ -89,3 +89,13 @@ tr.clickable{cursor:pointer}tr.clickable:hover td{background:#f8fafb}
 .y2v-page canvas{display:block;margin:0 auto}
 .y2v-image{display:block;max-width:100%;max-height:100%;margin:auto;object-fit:contain;background:#fff}
 @media(max-width:640px){.y2v-stage{padding:4px}.y2v-head{min-height:44px;padding:5px 7px}}
+
+.y2v-mail-tabs{display:flex;gap:5px;overflow:auto;min-width:0}
+.y2v-mail-tabs button{border:1px solid var(--line);background:#fff;color:var(--muted);padding:7px 10px;border-radius:7px;font-size:12px;font-weight:700;white-space:nowrap}
+.y2v-mail-tabs button.active{background:var(--accent2);border-color:var(--accent2);color:#fff}
+.y2v-mail-stage{background:#f4f6f8}
+.y2v-mail{width:min(920px,100%);margin:0 auto;background:#fff;min-height:100%;padding:22px;box-sizing:border-box}
+.y2v-mail h2{font-size:18px;margin:0 0 8px}
+.y2v-mail-meta{font-size:12px;color:var(--muted);padding-bottom:14px;border-bottom:1px solid var(--line);margin-bottom:16px}
+.y2v-mail-body{font-size:14px;line-height:1.55;color:var(--ink)}
+.y2v-local-frame{display:block;width:100%;height:100%;border:0;background:#fff}
