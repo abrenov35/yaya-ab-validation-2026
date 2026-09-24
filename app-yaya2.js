@@ -20,6 +20,133 @@ function dateFr(v){
   if(/^\d{4}$/.test(s))return s;
   var d3=new Date(s);return isNaN(d3)?s:d3.toLocaleDateString("fr-FR");
 }
+
+var pdfJsPromise=null;
+function driveIdFromUrl(value){
+  var s=String(value||"").trim(),m=s.match(/drive\.google\.com\/file\/d\/([^/?#]+)/i);
+  if(m)return m[1];
+  m=s.match(/[?&]id=([^&#]+)/i);
+  return m?decodeURIComponent(m[1]):"";
+}
+function ensurePdfJs(){
+  if(window.pdfjsLib)return Promise.resolve(window.pdfjsLib);
+  if(pdfJsPromise)return pdfJsPromise;
+  pdfJsPromise=new Promise(function(resolve,reject){
+    var script=document.createElement("script");
+    script.src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js";
+    script.async=true;
+    script.onload=function(){
+      if(!window.pdfjsLib){reject(new Error("PDF.js indisponible"));return;}
+      try{window.pdfjsLib.GlobalWorkerOptions.workerSrc="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";}catch(e){}
+      resolve(window.pdfjsLib);
+    };
+    script.onerror=function(){reject(new Error("Chargement du lecteur PDF impossible"));};
+    document.head.appendChild(script);
+  }).catch(function(e){pdfJsPromise=null;throw e;});
+  return pdfJsPromise;
+}
+function viewerRoot(){
+  var root=document.getElementById("yaya2Viewer");
+  if(root)return root;
+  root=document.createElement("div");
+  root.id="yaya2Viewer";
+  document.body.appendChild(root);
+  return root;
+}
+function closeViewer(){
+  var root=document.getElementById("yaya2Viewer");
+  if(root)root.remove();
+}
+function viewerFrame(title){
+  var root=viewerRoot();
+  root.innerHTML='<div class="y2v-overlay"><div class="y2v-modal"><div class="y2v-head"><div class="y2v-title">'+esc(title||"Document")+'</div><div class="y2v-actions"><button class="btn" data-y2v-close>Fermer</button></div></div><div class="y2v-stage"><div class="y2v-loading">Chargement du document…</div></div></div></div>';
+  var overlay=root.querySelector(".y2v-overlay");
+  overlay.onclick=function(e){if(e.target===overlay)closeViewer();};
+  root.querySelector("[data-y2v-close]").onclick=closeViewer;
+  return {root:root,stage:root.querySelector(".y2v-stage"),head:root.querySelector(".y2v-head")};
+}
+async function fetchDriveFileForViewer(url){
+  var id=driveIdFromUrl(url);
+  if(!id)throw new Error("Ce fichier n’est pas un fichier Google Drive reconnu.");
+  var ctrl=new AbortController();
+  var timer=setTimeout(function(){try{ctrl.abort();}catch(e){}},18000);
+  try{
+    var response=await fetch(API,{
+      method:"POST",
+      headers:{"Content-Type":"text/plain;charset=utf-8"},
+      body:JSON.stringify({action:"getDriveFile",data:{url:String(url||""),id:id}}),
+      signal:ctrl.signal
+    });
+    if(!response.ok)throw new Error("API Yaya HTTP "+response.status);
+    var json=await response.json();
+    if(!json||json.ok!==true)throw new Error(json&&json.error?json.error:"Lecture du fichier indisponible");
+    var data=json.data||{};
+    if(!data.base64)throw new Error("Fichier vide");
+    return data;
+  }finally{clearTimeout(timer);}
+}
+function b64bytes(base64){
+  var raw=atob(String(base64||"")),bytes=new Uint8Array(raw.length);
+  for(var i=0;i<raw.length;i++)bytes[i]=raw.charCodeAt(i);
+  return bytes;
+}
+async function renderPdfNative(stage,data){
+  var pdfjs=await ensurePdfJs();
+  var task=pdfjs.getDocument({data:b64bytes(data.base64),disableWorker:true});
+  var pdf=await task.promise;
+  stage.innerHTML="";
+  stage.classList.add("y2v-pdf-stage");
+  var wrap=document.createElement("div");
+  wrap.className="y2v-pdf-pages";
+  stage.appendChild(wrap);
+  for(var pageNo=1;pageNo<=pdf.numPages;pageNo++){
+    var page=await pdf.getPage(pageNo);
+    var raw=page.getViewport({scale:1});
+    var available=Math.max(320,Math.min(1220,(stage.clientWidth||1000)-24));
+    var cssScale=Math.max(.2,available/raw.width);
+    var dpr=Math.min(2,Math.max(1,window.devicePixelRatio||1));
+    var viewport=page.getViewport({scale:cssScale*dpr});
+    var pageWrap=document.createElement("div");
+    pageWrap.className="y2v-page";
+    var canvas=document.createElement("canvas");
+    canvas.width=Math.max(1,Math.floor(viewport.width));
+    canvas.height=Math.max(1,Math.floor(viewport.height));
+    canvas.style.width=Math.floor(raw.width*cssScale)+"px";
+    canvas.style.height=Math.floor(raw.height*cssScale)+"px";
+    canvas.style.maxWidth="100%";
+    pageWrap.appendChild(canvas);
+    wrap.appendChild(pageWrap);
+    await page.render({canvasContext:canvas.getContext("2d"),viewport:viewport}).promise;
+  }
+  stage.scrollTop=0;
+}
+function renderImageNative(stage,data){
+  stage.innerHTML="";
+  var img=document.createElement("img");
+  img.className="y2v-image";
+  img.alt=data.filename||"Document";
+  img.src="data:"+(data.mimeType||"image/jpeg")+";base64,"+data.base64;
+  stage.appendChild(img);
+}
+async function openInternalDocument(url,title){
+  var ui=viewerFrame(title);
+  try{
+    var data=await fetchDriveFileForViewer(url);
+    if(!ui.root.isConnected)return;
+    var mime=String(data.mimeType||"").toLowerCase();
+    if(mime.indexOf("image/")===0){
+      renderImageNative(ui.stage,data);
+      return;
+    }
+    if(mime==="application/pdf"||/\.pdf$/i.test(String(data.filename||title||""))){
+      await renderPdfNative(ui.stage,data);
+      return;
+    }
+    ui.stage.innerHTML='<div class="y2v-error">Ce format n’est pas encore prévisualisable dans Yaya 2.<br><strong>'+esc(data.filename||title||"Document")+'</strong></div>';
+  }catch(err){
+    ui.stage.innerHTML='<div class="y2v-error">Aperçu indisponible dans Yaya 2.<br>'+esc(err&&err.message?err.message:err)+'</div>';
+  }
+}
 function typeNorm(v){return String(v||"").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"");}
 function activeRows(rows){return (rows||[]).filter(function(r){var s=String(r.statutValidation||"").toUpperCase();return s!=="A_VALIDER"&&s!=="REJETEE"&&s!=="DOUBLON";});}
 function isSub(r){return typeNorm(r.typeDoc).indexOf("facture sous-traitant")>=0||String(r.sousTraitant||"").trim()!=="";}
@@ -175,7 +302,7 @@ function rowsTable(headers,rows){
 function chantierTab(cid){
   if(state.tab==="documents"){
     var docs=docsFor(cid);if(!docs.length)return '<div class="empty">Aucun document ou mail pour ce chantier.</div>';
-    return docs.map(function(d){return '<div class="doc-row"><div class="doc-type">'+esc(d.kind)+'</div><div class="doc-title">'+esc(d.title)+'</div><div class="muted">'+esc(d.sub)+'</div><div class="muted">'+dateFr(d.date)+'</div><div>'+(d.link?'<a class="doc-link" href="'+esc(d.link)+'" target="_blank" rel="noopener">Ouvrir</a>':"—")+'</div></div>';}).join("");
+    return docs.map(function(d){return '<div class="doc-row"><div class="doc-type">'+esc(d.kind)+'</div><div class="doc-title">'+esc(d.title)+'</div><div class="muted">'+esc(d.sub)+'</div><div class="muted">'+dateFr(d.date)+'</div><div>'+(d.link?'<button class="doc-link y2-open-doc" type="button" data-doc-url="'+esc(d.link)+'" data-doc-title="'+esc(d.title||d.kind||"Document")+'">Ouvrir</button>':"—")+'</div></div>';}).join("");
   }
   if(state.tab==="achats"){
     var a=activeRows(rowsFor("achats",cid)).filter(function(r){return purchaseImpact(r)!==0;});
@@ -192,11 +319,11 @@ function chantierTab(cid){
   if(state.tab==="photos"){
     var ph=rowsFor("documents",cid).filter(function(d){return typeNorm(d.type)==="photo";});
     if(!ph.length)return '<div class="empty">Aucune photo pour ce chantier.</div>';
-    return ph.map(function(d){return '<div class="doc-row"><div class="doc-type">PHOTO</div><div class="doc-title">'+esc(d.titre||d.sujet||"Photo")+'</div><div class="muted">'+esc(d.sujet||"")+'</div><div class="muted">'+dateFr(d.date)+'</div><div>'+(d.lien?'<a class="doc-link" href="'+esc(d.lien)+'" target="_blank" rel="noopener">Ouvrir</a>':"—")+'</div></div>';}).join("");
+    return ph.map(function(d){return '<div class="doc-row"><div class="doc-type">PHOTO</div><div class="doc-title">'+esc(d.titre||d.sujet||"Photo")+'</div><div class="muted">'+esc(d.sujet||"")+'</div><div class="muted">'+dateFr(d.date)+'</div><div>'+(d.lien?'<button class="doc-link y2-open-doc" type="button" data-doc-url="'+esc(d.lien)+'" data-doc-title="'+esc(d.titre||d.sujet||"Photo")+'">Ouvrir</button>':"—")+'</div></div>';}).join("");
   }
   if(state.tab==="devis"){
     var dv=((state.data.DEVIS)||[]).filter(function(d){return String(d["ID chantier"]||"")===String(cid);});
-    return rowsTable(["N°","Date","Fichier","Lien"],dv.map(function(d){return["<td>"+esc(d["N° devis"]||"—")+"</td>","<td>"+dateFr(d.Date)+"</td>","<td class=\"strong\">"+esc(d["Nom fichier"]||"Devis")+"</td>","<td>"+(d["Lien Drive"]?'<a class="doc-link" target="_blank" rel="noopener" href="'+esc(d["Lien Drive"])+'">Ouvrir</a>':"—")+"</td>"];}));
+    return rowsTable(["N°","Date","Fichier","Lien"],dv.map(function(d){return["<td>"+esc(d["N° devis"]||"—")+"</td>","<td>"+dateFr(d.Date)+"</td>","<td class=\"strong\">"+esc(d["Nom fichier"]||"Devis")+"</td>","<td>"+(d["Lien Drive"]?'<button class="doc-link y2-open-doc" type="button" data-doc-url="'+esc(d["Lien Drive"])+'" data-doc-title="'+esc(d["Nom fichier"]||"Devis")+'">Ouvrir</button>':"—")+"</td>"];}));
   }
   if(state.tab==="heures"){
     var hs=((state.data.heures)||[]).filter(function(h){return String(h.type)==="chantier"&&String(h.ref)===String(cid);});
@@ -222,7 +349,7 @@ function genericDocuments(){
   rows.sort(function(a,b){return String(b.date||"").localeCompare(String(a.date||""));});rows=rows.slice(0,100);
   var html=pageHead("Documents & mails","Une seule page à l’écran ; stockage MAILS et DOCUMENTS séparé dans Yaya 2.");
   html+='<div class="panel"><div class="table-wrap"><table><thead><tr><th>Date</th><th>Chantier</th><th>Type</th><th>Objet / document</th><th></th></tr></thead><tbody>';
-  rows.forEach(function(r){var c=chantierById(r.chantier);html+='<tr><td>'+dateFr(r.date)+'</td><td class="strong">'+esc(c?c.nom:r.chantier)+'</td><td><span class="badge">'+esc(r.type)+'</span></td><td>'+esc(r.title)+'</td><td>'+(r.link?'<a class="doc-link" href="'+esc(r.link)+'" target="_blank" rel="noopener">Ouvrir</a>':"—")+'</td></tr>';});
+  rows.forEach(function(r){var c=chantierById(r.chantier);html+='<tr><td>'+dateFr(r.date)+'</td><td class="strong">'+esc(c?c.nom:r.chantier)+'</td><td><span class="badge">'+esc(r.type)+'</span></td><td>'+esc(r.title)+'</td><td>'+(r.link?'<button class="doc-link y2-open-doc" type="button" data-doc-url="'+esc(r.link)+'" data-doc-title="'+esc(r.title||"Document")+'">Ouvrir</button>':"—")+'</td></tr>';});
   html+="</tbody></table></div></div>";return shell(html,"Documents & mails");
 }
 function genericTablePage(kind){
@@ -251,6 +378,12 @@ function bind(){
   document.querySelectorAll("[data-action=reload]").forEach(function(b){b.onclick=function(){load(true);};});
   var search=document.getElementById("searchChantiers");if(search){search.oninput=function(){state.query=search.value;var pos=search.selectionStart;render();var s=document.getElementById("searchChantiers");if(s){s.focus();try{s.setSelectionRange(pos,pos);}catch(e){}}};}
   document.querySelectorAll("[data-action=status]").forEach(function(s){s.onchange=function(){var id=s.getAttribute("data-id");state.overrides[id]=Object.assign({},state.overrides[id]||{},{statut:s.value});render();};});
+  document.querySelectorAll(".y2-open-doc").forEach(function(b){
+    b.onclick=function(e){
+      e.preventDefault();e.stopPropagation();
+      openInternalDocument(b.getAttribute("data-doc-url"),b.getAttribute("data-doc-title"));
+    };
+  });
 }
 function normalizeData(data){
   data=data&&typeof data==="object"?data:{};
