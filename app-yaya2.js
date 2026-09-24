@@ -2,7 +2,7 @@
 "use strict";
 
 var API="https://script.google.com/macros/s/AKfycbxXBpXjWXEF-7p6vvOE3blSBc8_5e62AtQb2stHjnrGE025cOxQGy-zAguYmN2u9O4K/exec";
-var state={data:null,page:"chantiers",selected:null,tab:"documents",query:"",loadedAt:null,source:"prod",overrides:{}};
+var state={data:null,page:"chantiers",selected:null,tab:"documents",query:"",loadedAt:null,source:"prod",statsYear:new Date().getFullYear(),overrides:{}};
 var STATUTS=["Signé","À programmer","En cours","SAV","Attente PV","Facturé","Clos facturé","Archivé"];
 
 function esc(v){return String(v==null?"":v).replace(/[&<>"']/g,function(c){return({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]);});}
@@ -247,10 +247,10 @@ function shell(content,title){
   return '<div class="shell">'+
     '<aside class="sidebar"><div class="brand"><div class="brand-mark">AB</div><div><div class="brand-title">Yaya 2</div><div class="brand-sub">AB RENOV 35</div></div></div>'+
     '<nav class="nav">'+
-      navBtn("chantiers","Chantiers")+navBtn("documents","Documents & mails")+navBtn("achats","Achats")+navBtn("charges","Charges")+navBtn("commandes","Commandes")+navBtn("devis","Devis")+navBtn("heures","Heures")+
+      navBtn("chantiers","Chantiers")+navBtn("documents","Documents & mails")+navBtn("achats","Achats")+navBtn("charges","Charges")+navBtn("commandes","Commandes")+navBtn("devis","Devis")+navBtn("heures","Heures")+navBtn("stats","CA signé")+
     '</nav><div class="sidebar-foot"><span class="test-pill">MODE TEST</span><br>Lecture PROD uniquement.<br>Les modifications de cette session ne sont jamais envoyées à Yaya.</div></aside>'+
     '<main class="main"><header class="topbar"><div class="top-title">'+esc(title||"Yaya 2")+'</div><div class="top-meta"><span class="read-label"><span class="status-dot"></span>'+sourceLabel+'</span><button class="btn" data-action="reload">Actualiser</button></div></header><div class="content">'+content+'</div></main>'+
-    '<nav class="mobile-nav">'+navBtn("chantiers","Chantiers")+navBtn("documents","Docs & mails")+navBtn("achats","Achats")+navBtn("commandes","Commandes")+navBtn("heures","Heures")+'</nav>'+
+    '<nav class="mobile-nav">'+navBtn("chantiers","Chantiers")+navBtn("documents","Docs & mails")+navBtn("commandes","Commandes")+navBtn("heures","Heures")+navBtn("stats","CA signé")+'</nav>'+
   '</div>';
 }
 function pageHead(title,sub,action){return '<div class="page-head"><div><h1>'+esc(title)+'</h1><p>'+esc(sub||"")+'</p></div>'+(action||"")+'</div>';}
@@ -391,6 +391,77 @@ function genericDocuments(){
   rows.forEach(function(r){var c=chantierById(r.chantier);html+='<tr><td>'+dateFr(r.date)+'</td><td class="strong">'+esc(c?c.nom:r.chantier)+'</td><td><span class="badge">'+esc(r.type)+'</span></td><td>'+esc(r.title)+'</td><td>'+(r.link?'<button class="doc-link y2-open-doc" type="button" data-doc-url="'+esc(r.link)+'" data-doc-title="'+esc(r.title||"Document")+'">Ouvrir</button>':"—")+'</td></tr>';});
   html+="</tbody></table></div></div>";return shell(html,"Documents & mails");
 }
+function manualCa2026(){
+  var doc=(state.data.documents||[]).find(function(d){return String(d.id||"")==="__CA_SIGNE_2026__";});
+  if(!doc)return Array(12).fill(null);
+  try{
+    var v=JSON.parse(String(doc.sujet||"[]"));
+    if(!Array.isArray(v))v=[];
+    while(v.length<12)v.push(null);
+    return v.slice(0,12).map(function(x){return x===null||x===""||x===undefined?null:n(x);});
+  }catch(e){return Array(12).fill(null);}
+}
+function statsValues(year){
+  var amounts=Array(12).fill(0),counts=Array(12).fill(0);
+  (state.data.chantiers||[]).forEach(function(ch){
+    var sig=String(ch.dateSignatureFixe||"").trim();
+    var m=sig.match(/^(\d{4})-(\d{2})/);
+    if(!m||Number(m[1])!==Number(year))return;
+    var month=Number(m[2])-1;
+    if(month<0||month>11)return;
+    amounts[month]+=n(ch.montantMarcheHT);
+    counts[month]++;
+  });
+  var manual=Array(12).fill(null);
+  if(Number(year)===2026){
+    manual=manualCa2026();
+    for(var i=0;i<8;i++){
+      if(manual[i]!==null)amounts[i]=n(manual[i]);
+    }
+  }
+  return {amounts:amounts,counts:counts,manual:manual};
+}
+function statsAvailableYears(){
+  var years=[2026,new Date().getFullYear()];
+  (state.data.chantiers||[]).forEach(function(ch){
+    var m=String(ch.dateSignatureFixe||"").match(/^(\d{4})-/);
+    if(m)years.push(Number(m[1]));
+  });
+  return Array.from(new Set(years.filter(function(y){return y>=2026&&y<=2100;}))).sort(function(a,b){return a-b;});
+}
+function statsPage(){
+  var months=["Janvier","Février","Mars","Avril","Mai","Juin","Juillet","Août","Septembre","Octobre","Novembre","Décembre"];
+  var short=["Janv.","Févr.","Mars","Avr.","Mai","Juin","Juil.","Août","Sept.","Oct.","Nov.","Déc."];
+  var years=statsAvailableYears();
+  if(years.indexOf(Number(state.statsYear))<0)state.statsYear=years[years.length-1]||2026;
+  var year=Number(state.statsYear)||2026;
+  var cur=statsValues(year),prev=statsValues(year-1);
+  var total=cur.amounts.reduce(function(a,b){return a+n(b);},0);
+  var totalPrev=prev.amounts.reduce(function(a,b){return a+n(b);},0);
+  var cum=0,cumPrev=0,max=Math.max.apply(null,cur.amounts.concat(year>2026?prev.amounts:[],[1]));
+  var axis=Math.max(50000,Math.ceil(max/50000)*50000);
+  var options=years.map(function(y){return '<option value="'+y+'" '+(y===year?"selected":"")+'>'+y+'</option>';}).join("");
+  var html=pageHead("CA signé","Évolution mensuelle du chiffre d’affaires signé HT.",'<select class="sim-select" id="statsYear">'+options+'</select>');
+  html+='<div class="stats-summary"><strong>'+eur(total)+'</strong><span>CA signé HT '+year+'</span>';
+  if(year>2026&&totalPrev)html+='<span>Année précédente : '+eur(totalPrev)+'</span>';
+  html+='</div>';
+  html+='<div class="panel stats-chart-panel"><div class="panel-head"><h2>CA signé par mois — '+year+'</h2><span>Montant marché HT</span></div><div class="stats-chart">';
+  cur.amounts.forEach(function(v,i){
+    var h=Math.max(2,Math.round((n(v)/axis)*100));
+    html+='<div class="stats-col"><div class="stats-bar-area"><div class="stats-value">'+(v?eur(v):"")+'</div><div class="stats-bar" style="height:'+h+'%"></div></div><div class="stats-month">'+short[i]+'</div></div>';
+  });
+  html+='</div></div>';
+  html+='<div class="panel"><div class="panel-head"><h2>Détail mensuel</h2><span>'+(year===2026?"Janvier à août : historique Yaya":"Comparaison annuelle")+'</span></div><div class="table-wrap"><table><thead><tr><th>Mois</th><th class="money">CA HT mois</th><th class="money">Cumul '+year+'</th>'+(year>2026?'<th class="money">Cumul '+(year-1)+'</th><th class="money">Évolution</th>':'')+'</tr></thead><tbody>';
+  months.forEach(function(m,i){
+    cum+=n(cur.amounts[i]);cumPrev+=n(prev.amounts[i]);
+    var evo=cumPrev?((cum-cumPrev)/cumPrev*100):null;
+    html+='<tr><td class="strong">'+m+(year===2026&&i<8&&cur.manual[i]!==null?' <span class="badge">historique</span>':'')+'</td><td class="money">'+eur(cur.amounts[i])+'</td><td class="money strong">'+eur(cum)+'</td>';
+    if(year>2026)html+='<td class="money">'+eur(cumPrev)+'</td><td class="money">'+(evo===null?"—":pct(evo))+'</td>';
+    html+='</tr>';
+  });
+  html+='</tbody></table></div></div>';
+  return shell(html,"CA signé");
+}
 function genericTablePage(kind){
   var title=kind.charAt(0).toUpperCase()+kind.slice(1),html=pageHead(title,"Vue globale de contrôle — lecture PROD.");
   var rows=[];
@@ -407,6 +478,7 @@ function render(){
   if(state.page==="dashboard"||state.page==="chantiers")el.innerHTML=chantierList();
   else if(state.page==="chantier")el.innerHTML=chantierPage();
   else if(state.page==="documents")el.innerHTML=genericDocuments();
+  else if(state.page==="stats")el.innerHTML=statsPage();
   else el.innerHTML=genericTablePage(state.page);
   bind();
 }
@@ -418,6 +490,7 @@ function bind(){
   var search=document.getElementById("searchChantiers");if(search){search.oninput=function(){state.query=search.value;var pos=search.selectionStart;render();var s=document.getElementById("searchChantiers");if(s){s.focus();try{s.setSelectionRange(pos,pos);}catch(e){}}};}
   document.querySelectorAll(".y2-open-doc").forEach(function(b){b.onclick=function(e){e.preventDefault();e.stopPropagation();openInternalDocument(b.getAttribute("data-doc-url"),b.getAttribute("data-doc-title"));};});
   document.querySelectorAll(".y2-open-mail").forEach(function(b){b.onclick=function(e){e.preventDefault();e.stopPropagation();var m=mailById(b.getAttribute("data-mail-id"));if(m)openMailViewer(m);};});
+  var sy=document.getElementById("statsYear");if(sy){sy.onchange=function(){state.statsYear=Number(sy.value)||2026;render();};}
 }
 function normalizeData(data){
   data=data&&typeof data==="object"?data:{};
