@@ -36,6 +36,41 @@ function chargeImpact(r){
 }
 function rowsFor(name,cid,key){key=key||"chantierId";return ((state.data&&state.data[name])||[]).filter(function(r){return String(r[key]||"")===String(cid);});}
 function chantierById(id){return ((state.data&&state.data.chantiers)||[]).find(function(c){return String(c.id)===String(id);});}
+function activityTime(v){
+  if(v==null||v==="")return 0;
+  if(typeof v==="number"){
+    var d=new Date(Math.round((v-25569)*86400*1000));
+    return isNaN(d)?0:d.getTime();
+  }
+  var s=String(v).trim();
+  if(/^\d{4}-\d{2}-\d{2}/.test(s)){
+    var d2=new Date(s.length===10?s+"T12:00:00":s);
+    return isNaN(d2)?0:d2.getTime();
+  }
+  var d3=new Date(s);
+  return isNaN(d3)?0:d3.getTime();
+}
+function recentActivityFor(cid){
+  var acts=[];
+  rowsFor("documents",cid).forEach(function(r){
+    var t=typeNorm(r.type),label=t==="photo"?"Photo":(t==="mail"||t==="mail_pj"?"Mail / document":"Document");
+    acts.push({ts:activityTime(r.date),label:label});
+  });
+  rowsFor("achats",cid).forEach(function(r){
+    acts.push({ts:activityTime(r.date),label:isSub(r)?"Charge":"Achat"});
+  });
+  rowsFor("commandes",cid).forEach(function(r){
+    acts.push({ts:activityTime(r.date),label:"Commande"});
+  });
+  ((state.data&&state.data.DEVIS)||[]).forEach(function(r){
+    if(String(r["ID chantier"]||"")===String(cid))acts.push({ts:activityTime(r.Date),label:"Devis"});
+  });
+  ((state.data&&state.data.heures)||[]).forEach(function(r){
+    if(String(r.type)==="chantier"&&String(r.ref)===String(cid))acts.push({ts:activityTime(r[""]||r.semaine),label:"Heures"});
+  });
+  acts=acts.filter(function(a){return a.ts>0;}).sort(function(a,b){return b.ts-a.ts;});
+  return acts[0]||null;
+}
 function chantierView(c){var o=state.overrides[c.id]||{};return Object.assign({},c,o);}
 function finances(cid){
   var achats=activeRows(rowsFor("achats",cid));
@@ -72,26 +107,21 @@ function shell(content,title){
 function pageHead(title,sub,action){return '<div class="page-head"><div><h1>'+esc(title)+'</h1><p>'+esc(sub||"")+'</p></div>'+(action||"")+'</div>';}
 function kpi(label,value,sub,cls){return '<div class="kpi"><div class="label">'+esc(label)+'</div><div class="value '+(cls||"")+'">'+value+'</div><div class="sub">'+esc(sub||"")+'</div></div>';}
 function dashboard(){
-  var cs=(state.data.chantiers||[]).filter(function(c){
-    if(!/^C\d+$/.test(String(c.id||"")))return false;
-    var s=typeNorm(chantierView(c).statut);
-    return s.indexOf("clos facture")<0&&s!=="archive";
-  });
-  var priority={"a programmer":1,"signe":2,"en cours":3,"sav":4,"attente pv":5,"facture":6};
-  cs.sort(function(a,b){
-    var sa=priority[typeNorm(chantierView(a).statut)]||99;
-    var sb=priority[typeNorm(chantierView(b).statut)]||99;
-    if(sa!==sb)return sa-sb;
-    return String(a.nom||"").localeCompare(String(b.nom||""),"fr");
-  });
-  var html=pageHead("Chantiers à piloter","Accès direct aux dossiers en cours. Cliquer sur un chantier pour ouvrir sa fiche.");
-  html+='<div class="panel"><div class="panel-head"><h2>Chantiers actifs</h2><span>'+cs.length+' chantier(s)</span></div><div class="table-wrap"><table><thead><tr><th>Chantier</th><th>ID</th><th>Statut</th><th>Démarrage</th><th>Signé le</th><th class="money">CA HT</th><th class="money">Marge</th></tr></thead><tbody>';
-  cs.forEach(function(c){
-    var v=chantierView(c),f=finances(c.id);
-    html+='<tr class="clickable" data-chantier="'+esc(c.id)+'"><td class="strong">'+esc(c.nom)+'</td><td class="muted">'+esc(c.id)+'</td><td>'+badgeStatus(v.statut)+'</td><td>'+dateFr(c.dateDemarrage)+'</td><td>'+dateFr(c.dateSignature)+'</td><td class="money">'+eur(f.ca)+'</td><td class="money '+(f.margin>=0?"margin-good":"margin-bad")+'">'+eur(f.margin)+'</td></tr>';
+  var cs=(state.data.chantiers||[]).filter(function(c){return /^C\d+$/.test(String(c.id||""));});
+  var recent=cs.map(function(c){
+    return {chantier:c,activity:recentActivityFor(c.id)};
+  }).filter(function(x){return !!x.activity;})
+    .sort(function(a,b){return b.activity.ts-a.activity.ts;})
+    .slice(0,12);
+
+  var html=pageHead("Activité récente","Les derniers chantiers ayant réellement bougé dans Yaya.");
+  html+='<div class="panel"><div class="panel-head"><h2>Dernières activités</h2><span>'+recent.length+' chantier(s)</span></div><div class="table-wrap"><table><thead><tr><th>Chantier</th><th>Dernière activité</th><th>Date</th><th>Statut</th><th class="money">CA HT</th><th class="money">Marge</th></tr></thead><tbody>';
+  recent.forEach(function(x){
+    var c=x.chantier,v=chantierView(c),f=finances(c.id);
+    html+='<tr class="clickable" data-chantier="'+esc(c.id)+'"><td class="strong">'+esc(c.nom)+'</td><td><span class="badge">'+esc(x.activity.label)+'</span></td><td>'+dateFr(new Date(x.activity.ts).toISOString())+'</td><td>'+badgeStatus(v.statut)+'</td><td class="money">'+eur(f.ca)+'</td><td class="money '+(f.margin>=0?"margin-good":"margin-bad")+'">'+eur(f.margin)+'</td></tr>';
   });
   html+="</tbody></table></div></div>";
-  return shell(html,"Chantiers à piloter");
+  return shell(html,"Activité récente");
 }
 function chantierList(){
   var q=typeNorm(state.query);
