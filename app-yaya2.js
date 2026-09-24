@@ -280,16 +280,16 @@ function chantierList(){
     .map(function(c){return {chantier:c,activity:recentActivityFor(c.id)};})
     .filter(function(x){return !!x.activity;})
     .sort(function(a,b){return b.activity.ts-a.activity.ts;})
-    .slice(0,8);
+    .slice(0,5);
 
   var cs=all.filter(function(c){
     return !q||typeNorm((c.nom||"")+" "+(c.id||"")+" "+(c.numero||"")).indexOf(q)>=0;
   });
   cs.sort(function(a,b){return String(a.nom||"").localeCompare(String(b.nom||""),"fr");});
 
-  var html=pageHead("Chantiers","Accès direct aux dossiers Yaya.",'<input class="search" id="searchChantiers" placeholder="Rechercher un chantier…" value="'+esc(state.query)+'">');
+  var html='<div class="chantier-search-row"><input class="search" id="searchChantiers" placeholder="Rechercher un chantier…" value="'+esc(state.query)+'"></div>';
 
-  html+='<div class="panel" style="margin-bottom:16px"><div class="panel-head"><h2>Activité récente</h2><span>Derniers chantiers modifiés</span></div><div class="table-wrap"><table><thead><tr><th>Chantier</th><th>Dernière activité</th><th>Date</th><th class="money">CA HT</th><th class="money">Marge</th></tr></thead><tbody>';
+  html+='<div class="panel recent-panel" style="margin-bottom:12px"><div class="panel-head compact"><h2>Activité récente</h2><span>5 derniers</span></div><div class="table-wrap"><table><thead><tr><th>Chantier</th><th>Dernière activité</th><th>Date</th><th class="money">CA HT</th><th class="money">Marge</th></tr></thead><tbody>';
   recent.forEach(function(x){
     var c=x.chantier,f=finances(c.id);
     html+='<tr class="clickable" data-chantier="'+esc(c.id)+'"><td class="strong">'+esc(c.nom)+'</td><td><span class="badge">'+esc(x.activity.label)+'</span></td><td>'+dateFr(new Date(x.activity.ts).toISOString())+'</td><td class="money">'+eur(f.ca)+'</td><td class="money '+(f.margin>=0?"margin-good":"margin-bad")+'">'+eur(f.margin)+'</td></tr>';
