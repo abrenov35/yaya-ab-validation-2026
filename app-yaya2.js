@@ -72,16 +72,26 @@ function shell(content,title){
 function pageHead(title,sub,action){return '<div class="page-head"><div><h1>'+esc(title)+'</h1><p>'+esc(sub||"")+'</p></div>'+(action||"")+'</div>';}
 function kpi(label,value,sub,cls){return '<div class="kpi"><div class="label">'+esc(label)+'</div><div class="value '+(cls||"")+'">'+value+'</div><div class="sub">'+esc(sub||"")+'</div></div>';}
 function dashboard(){
-  var cs=(state.data.chantiers||[]).filter(function(c){return /^C\d+$/.test(String(c.id||""));});
-  var totals=cs.reduce(function(a,c){var f=finances(c.id);a.ca+=f.ca;a.purchases+=f.purchases;a.charges+=f.charges;a.labor+=f.labor;a.margin+=f.margin;return a;},{ca:0,purchases:0,charges:0,labor:0,margin:0});
-  var active=cs.filter(function(c){var s=typeNorm(chantierView(c).statut);return s.indexOf("clos facture")<0&&s!=="archive";}).length;
-  var html=pageHead("Tableau de bord","Vue de travail Yaya 2 — données réelles, interface TEST.");
-  html+='<div class="grid-kpi">'+kpi("Chantiers actifs",String(active),"sur "+cs.length+" chantiers Cxxxx")+kpi("CA HT",eur(totals.ca),"Valeur maître Extranet")+kpi("Achats",eur(totals.purchases),"Hors commandes et devis")+kpi("Sous-traitance",eur(totals.charges),"Factures sous-traitants")+kpi("Main-d’œuvre",eur(totals.labor),"Toutes heures × 50 €")+kpi("Marge",eur(totals.margin),totals.ca?pct(totals.margin/totals.ca*100):"—",totals.margin>=0?"margin-good":"margin-bad")+"</div>";
-  var recent=cs.slice().sort(function(a,b){return String(b.id).localeCompare(String(a.id),undefined,{numeric:true});}).slice(0,14);
-  html+='<div class="panel"><div class="panel-head"><h2>Chantiers récents</h2><span>Cliquer pour ouvrir la fiche</span></div><div class="table-wrap"><table><thead><tr><th>Chantier</th><th>ID</th><th>Statut</th><th class="money">CA HT</th><th class="money">Marge</th><th class="money">Marge %</th></tr></thead><tbody>';
-  recent.forEach(function(c){var v=chantierView(c),f=finances(c.id);html+='<tr class="clickable" data-chantier="'+esc(c.id)+'"><td class="strong">'+esc(c.nom)+'</td><td class="muted">'+esc(c.id)+'</td><td>'+badgeStatus(v.statut)+'</td><td class="money">'+eur(f.ca)+'</td><td class="money '+(f.margin>=0?"margin-good":"margin-bad")+'">'+eur(f.margin)+'</td><td class="money">'+pct(f.marginPct)+'</td></tr>';});
+  var cs=(state.data.chantiers||[]).filter(function(c){
+    if(!/^C\d+$/.test(String(c.id||"")))return false;
+    var s=typeNorm(chantierView(c).statut);
+    return s.indexOf("clos facture")<0&&s!=="archive";
+  });
+  var priority={"a programmer":1,"signe":2,"en cours":3,"sav":4,"attente pv":5,"facture":6};
+  cs.sort(function(a,b){
+    var sa=priority[typeNorm(chantierView(a).statut)]||99;
+    var sb=priority[typeNorm(chantierView(b).statut)]||99;
+    if(sa!==sb)return sa-sb;
+    return String(a.nom||"").localeCompare(String(b.nom||""),"fr");
+  });
+  var html=pageHead("Chantiers à piloter","Accès direct aux dossiers en cours. Cliquer sur un chantier pour ouvrir sa fiche.");
+  html+='<div class="panel"><div class="panel-head"><h2>Chantiers actifs</h2><span>'+cs.length+' chantier(s)</span></div><div class="table-wrap"><table><thead><tr><th>Chantier</th><th>ID</th><th>Statut</th><th>Démarrage</th><th>Signé le</th><th class="money">CA HT</th><th class="money">Marge</th></tr></thead><tbody>';
+  cs.forEach(function(c){
+    var v=chantierView(c),f=finances(c.id);
+    html+='<tr class="clickable" data-chantier="'+esc(c.id)+'"><td class="strong">'+esc(c.nom)+'</td><td class="muted">'+esc(c.id)+'</td><td>'+badgeStatus(v.statut)+'</td><td>'+dateFr(c.dateDemarrage)+'</td><td>'+dateFr(c.dateSignature)+'</td><td class="money">'+eur(f.ca)+'</td><td class="money '+(f.margin>=0?"margin-good":"margin-bad")+'">'+eur(f.margin)+'</td></tr>';
+  });
   html+="</tbody></table></div></div>";
-  return shell(html,"Tableau de bord");
+  return shell(html,"Chantiers à piloter");
 }
 function chantierList(){
   var q=typeNorm(state.query);
