@@ -66,87 +66,107 @@ function viewerFrame(title){
   root.querySelector("[data-y2v-close]").onclick=closeViewer;
   return {root:root,stage:root.querySelector(".y2v-stage"),head:root.querySelector(".y2v-head")};
 }
-async function fetchDriveFileForViewer(url){
-  var id=driveIdFromUrl(url);
-  if(!id)throw new Error("Ce fichier n’est pas un fichier Google Drive reconnu.");
-  var ctrl=new AbortController();
-  var timer=setTimeout(function(){try{ctrl.abort();}catch(e){}},18000);
-  try{
-    var response=await fetch(API,{
-      method:"POST",
-      headers:{"Content-Type":"text/plain;charset=utf-8"},
-      body:JSON.stringify({action:"getDriveFile",data:{url:String(url||""),id:id}}),
-      signal:ctrl.signal
-    });
-    if(!response.ok)throw new Error("API Yaya HTTP "+response.status);
-    var json=await response.json();
-    if(!json||json.ok!==true)throw new Error(json&&json.error?json.error:"Lecture du fichier indisponible");
-    var data=json.data||{};
-    if(!data.base64)throw new Error("Fichier vide");
-    return data;
-  }finally{clearTimeout(timer);}
+function drivePageSrc(id,page,width){
+  return "https://drive.google.com/file/d/"+encodeURIComponent(id)+"/image?pagenumber="+Math.max(1,page)+"&w="+Math.max(1000,width||1800);
 }
-function b64bytes(base64){
-  var raw=atob(String(base64||"")),bytes=new Uint8Array(raw.length);
-  for(var i=0;i<raw.length;i++)bytes[i]=raw.charCodeAt(i);
-  return bytes;
+function loadPreviewImage(src,timeoutMs){
+  return new Promise(function(resolve,reject){
+    var img=new Image(),done=false;
+    function finish(ok){
+      if(done)return;done=true;clearTimeout(timer);img.onload=img.onerror=null;
+      ok?resolve(img):reject(new Error("Image indisponible"));
+    }
+    var timer=setTimeout(function(){finish(false);},timeoutMs||6000);
+    img.onload=function(){finish(img.naturalWidth>50&&img.naturalHeight>50);};
+    img.onerror=function(){finish(false);};
+    img.src=src;
+  });
 }
-async function renderPdfNative(stage,data){
-  var pdfjs=await ensurePdfJs();
-  var task=pdfjs.getDocument({data:b64bytes(data.base64),disableWorker:true});
-  var pdf=await task.promise;
+async function showDrivePdf(stage,id){
   stage.innerHTML="";
-  stage.classList.add("y2v-pdf-stage");
-  var wrap=document.createElement("div");
-  wrap.className="y2v-pdf-pages";
-  stage.appendChild(wrap);
-  for(var pageNo=1;pageNo<=pdf.numPages;pageNo++){
-    var page=await pdf.getPage(pageNo);
-    var raw=page.getViewport({scale:1});
-    var available=Math.max(320,Math.min(1220,(stage.clientWidth||1000)-24));
-    var cssScale=Math.max(.2,available/raw.width);
-    var dpr=Math.min(2,Math.max(1,window.devicePixelRatio||1));
-    var viewport=page.getViewport({scale:cssScale*dpr});
-    var pageWrap=document.createElement("div");
-    pageWrap.className="y2v-page";
-    var canvas=document.createElement("canvas");
-    canvas.width=Math.max(1,Math.floor(viewport.width));
-    canvas.height=Math.max(1,Math.floor(viewport.height));
-    canvas.style.width=Math.floor(raw.width*cssScale)+"px";
-    canvas.style.height=Math.floor(raw.height*cssScale)+"px";
-    canvas.style.maxWidth="100%";
-    pageWrap.appendChild(canvas);
-    wrap.appendChild(pageWrap);
-    await page.render({canvasContext:canvas.getContext("2d"),viewport:viewport}).promise;
+  stage.className="y2v-stage y2v-pdf-stage";
+  var wrap=document.createElement("div");wrap.className="y2v-pdf-pages";stage.appendChild(wrap);
+  var width=Math.max(1000,Math.min(2200,Math.round((stage.clientWidth||1000)*1.6))),count=0;
+  for(var page=1;page<=60;page++){
+    var img;
+    try{img=await loadPreviewImage(drivePageSrc(id,page,width),5000);}
+    catch(e){if(page===1)throw e;break;}
+    var pw=document.createElement("div");pw.className="y2v-page";
+    img.style.cssText="display:block;width:100%;height:auto;max-width:100%;margin:0;";
+    pw.appendChild(img);wrap.appendChild(pw);count++;
   }
+  if(!count)throw new Error("Aucune page PDF lisible");
   stage.scrollTop=0;
 }
-function renderImageNative(stage,data){
-  stage.innerHTML="";
-  var img=document.createElement("img");
-  img.className="y2v-image";
-  img.alt=data.filename||"Document";
-  img.src="data:"+(data.mimeType||"image/jpeg")+";base64,"+data.base64;
-  stage.appendChild(img);
+async function showDriveImage(stage,id){
+  stage.innerHTML='<div class="y2v-loading">Chargement de l’image…</div>';
+  var img=await loadPreviewImage("https://drive.google.com/thumbnail?id="+encodeURIComponent(id)+"&sz=w2200",7000);
+  stage.innerHTML="";img.className="y2v-image";stage.appendChild(img);
+}
+function isDropbox(value){return /dropbox\.com|dropboxusercontent\.com/i.test(String(value||""));}
+function dropboxDirect(value){
+  try{
+    var u=new URL(String(value||""));
+    if(/(^|\.)dropbox\.com$/i.test(u.hostname))u.hostname="dl.dropboxusercontent.com";
+    u.searchParams.delete("dl");u.searchParams.delete("raw");u.searchParams.delete("st");
+    return u.toString();
+  }catch(e){return String(value||"");}
+}
+async function showDropbox(stage,url,title){
+  var response=await fetch(dropboxDirect(url),{cache:"no-store",credentials:"omit"});
+  if(!response.ok)throw new Error("Dropbox HTTP "+response.status);
+  var blob=await response.blob();
+  if(!blob.size)throw new Error("Fichier Dropbox vide");
+  var blobUrl=URL.createObjectURL(blob);
+  if(String(blob.type||"").indexOf("image/")===0){
+    stage.innerHTML="";var img=document.createElement("img");img.className="y2v-image";img.src=blobUrl;stage.appendChild(img);return;
+  }
+  if(String(blob.type||"")==="application/pdf"||/\.pdf$/i.test(String(title||""))){
+    stage.innerHTML="";var frame=document.createElement("iframe");frame.className="y2v-local-frame";frame.src=blobUrl;frame.title=title||"PDF";stage.appendChild(frame);return;
+  }
+  throw new Error("Format Dropbox non prévisualisable");
+}
+async function showInternalInStage(stage,url,title){
+  try{
+    var value=String(url||"").trim(),id=driveIdFromUrl(value);
+    if(id){
+      if(/\.(jpg|jpeg|png|webp|gif)$/i.test(String(title||"")))await showDriveImage(stage,id);
+      else await showDrivePdf(stage,id);
+      return;
+    }
+    if(isDropbox(value)){await showDropbox(stage,value,title);return;}
+    throw new Error("Ce format de lien n’est pas encore pris en charge");
+  }catch(err){
+    stage.innerHTML='<div class="y2v-error">Aperçu indisponible.<br>'+esc(err&&err.message?err.message:err)+'</div>';
+  }
 }
 async function openInternalDocument(url,title){
   var ui=viewerFrame(title);
-  try{
-    var data=await fetchDriveFileForViewer(url);
-    if(!ui.root.isConnected)return;
-    var mime=String(data.mimeType||"").toLowerCase();
-    if(mime.indexOf("image/")===0){
-      renderImageNative(ui.stage,data);
-      return;
-    }
-    if(mime==="application/pdf"||/\.pdf$/i.test(String(data.filename||title||""))){
-      await renderPdfNative(ui.stage,data);
-      return;
-    }
-    ui.stage.innerHTML='<div class="y2v-error">Ce format n’est pas encore prévisualisable dans Yaya 2.<br><strong>'+esc(data.filename||title||"Document")+'</strong></div>';
-  }catch(err){
-    ui.stage.innerHTML='<div class="y2v-error">Aperçu indisponible dans Yaya 2.<br>'+esc(err&&err.message?err.message:err)+'</div>';
-  }
+  await showInternalInStage(ui.stage,url,title);
+}
+function openMailViewer(mail){
+  var id=String(mail&&mail.id||mail&&mail.messageId||"");
+  var atts=mailAttachments(id),root=viewerRoot();
+  root.innerHTML='<div class="y2v-overlay"><div class="y2v-modal"><div class="y2v-head"><div class="y2v-mail-tabs"></div><div class="y2v-actions"><button class="btn" data-y2v-close>Fermer</button></div></div><div class="y2v-stage"></div></div></div>';
+  var stage=root.querySelector(".y2v-stage"),tabs=root.querySelector(".y2v-mail-tabs");
+  root.querySelector("[data-y2v-close]").onclick=closeViewer;
+  function active(btn){tabs.querySelectorAll("button").forEach(function(b){b.classList.toggle("active",b===btn);});}
+  var mb=document.createElement("button");mb.type="button";mb.textContent="Mail";mb.className="active";
+  mb.onclick=function(){
+    active(mb);
+    stage.className="y2v-stage y2v-mail-stage";
+    var subject=String(mail.objet||mail.objetMail||"Mail");
+    var sender=String(mail.expediteur||mail.sujet||"");
+    var body=String(mail.corps||mail.contenuMail||mail.titre||"");
+    stage.innerHTML='<div class="y2v-mail"><h2>'+esc(subject)+'</h2><div class="y2v-mail-meta">'+esc(sender)+'</div><div class="y2v-mail-body">'+esc(body).replace(/\n/g,"<br>")+'</div></div>';
+  };
+  tabs.appendChild(mb);
+  atts.forEach(function(d,index){
+    var b=document.createElement("button");b.type="button";b.textContent="PJ "+(index+1);b.title=String(d.titre||"Pièce jointe");
+    b.onclick=function(){active(b);stage.className="y2v-stage";stage.innerHTML='<div class="y2v-loading">Chargement de la pièce…</div>';showInternalInStage(stage,d.lien,d.titre);};
+    tabs.appendChild(b);
+  });
+  mb.onclick();
 }
 function typeNorm(v){return String(v||"").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"");}
 function activeRows(rows){return (rows||[]).filter(function(r){var s=String(r.statutValidation||"").toUpperCase();return s!=="A_VALIDER"&&s!=="REJETEE"&&s!=="DOUBLON";});}
@@ -289,10 +309,25 @@ function docsFor(cid){
   var docs=rowsFor("documents",cid).filter(function(d){return typeNorm(d.type)!=="photo";});
   var mails=rowsFor("MAILS",cid);
   var combined=[];
-  mails.forEach(function(m){combined.push({kind:"MAIL",title:m.objet||"Mail",sub:m.expediteur||"",date:m.date,link:m.lienGmail||"",body:m.corps||""});});
-  docs.forEach(function(d){combined.push({kind:d.type||"Document",title:d.objetMail||d.titre||"Document",sub:d.sujet||"",date:d.date,link:d.lien||"",body:d.contenuMail||""});});
+  mails.forEach(function(m){
+    combined.push({kind:"MAIL",id:m.id||m.messageId,title:m.objet||"Mail",sub:m.expediteur||"",date:m.date,link:m.lienGmail||"",body:m.corps||""});
+  });
+  docs.forEach(function(d){
+    combined.push({kind:d.type||"Document",id:d.id,title:d.objetMail||d.titre||"Document",sub:d.sujet||"",date:d.date,link:d.lien||"",body:d.contenuMail||d.titre||""});
+  });
   combined.sort(function(a,b){return String(b.date||"").localeCompare(String(a.date||""));});
   return combined;
+}
+function mailById(id){
+  id=String(id||"");
+  return (state.data.documents||[]).find(function(d){return String(d.id||"")===id&&typeNorm(d.type)==="mail";})||
+         (state.data.MAILS||[]).find(function(m){return String(m.id||m.messageId||"")===id})||null;
+}
+function mailAttachments(id){
+  id=String(id||"");
+  return (state.data.documents||[]).filter(function(d){
+    return typeNorm(d.type)==="mail_pj"&&String(d.sujet||d.mailId||d.parentMailId||"")===id;
+  });
 }
 function rowsTable(headers,rows){
   if(!rows.length)return '<div class="empty">Aucun élément pour ce chantier.</div>';
@@ -303,7 +338,12 @@ function rowsTable(headers,rows){
 function chantierTab(cid){
   if(state.tab==="documents"){
     var docs=docsFor(cid);if(!docs.length)return '<div class="empty">Aucun document ou mail pour ce chantier.</div>';
-    return docs.map(function(d){return '<div class="doc-row"><div class="doc-type">'+esc(d.kind)+'</div><div class="doc-title">'+esc(d.title)+'</div><div class="muted">'+esc(d.sub)+'</div><div class="muted">'+dateFr(d.date)+'</div><div>'+(d.link?'<button class="doc-link y2-open-doc" type="button" data-doc-url="'+esc(d.link)+'" data-doc-title="'+esc(d.title||d.kind||"Document")+'">Ouvrir</button>':"—")+'</div></div>';}).join("");
+    return docs.map(function(d){
+      var action="—";
+      if(typeNorm(d.kind)==="mail")action='<button class="doc-link y2-open-mail" type="button" data-mail-id="'+esc(d.id||"")+'">Ouvrir</button>';
+      else if(d.link)action='<button class="doc-link y2-open-doc" type="button" data-doc-url="'+esc(d.link)+'" data-doc-title="'+esc(d.title||d.kind||"Document")+'">Ouvrir</button>';
+      return '<div class="doc-row"><div class="doc-type">'+esc(d.kind)+'</div><div class="doc-title">'+esc(d.title)+'</div><div class="muted">'+esc(d.sub)+'</div><div class="muted">'+dateFr(d.date)+'</div><div>'+action+'</div></div>';
+    }).join("");
   }
   if(state.tab==="achats"){
     var a=activeRows(rowsFor("achats",cid)).filter(function(r){return purchaseImpact(r)!==0;});
@@ -376,6 +416,8 @@ function bind(){
   document.querySelectorAll("[data-tab]").forEach(function(b){b.onclick=function(){state.tab=b.getAttribute("data-tab");render();};});
   document.querySelectorAll("[data-action=reload]").forEach(function(b){b.onclick=function(){load(true);};});
   var search=document.getElementById("searchChantiers");if(search){search.oninput=function(){state.query=search.value;var pos=search.selectionStart;render();var s=document.getElementById("searchChantiers");if(s){s.focus();try{s.setSelectionRange(pos,pos);}catch(e){}}};}
+  document.querySelectorAll(".y2-open-doc").forEach(function(b){b.onclick=function(e){e.preventDefault();e.stopPropagation();openInternalDocument(b.getAttribute("data-doc-url"),b.getAttribute("data-doc-title"));};});
+  document.querySelectorAll(".y2-open-mail").forEach(function(b){b.onclick=function(e){e.preventDefault();e.stopPropagation();var m=mailById(b.getAttribute("data-mail-id"));if(m)openMailViewer(m);};});
 }
 function normalizeData(data){
   data=data&&typeof data==="object"?data:{};
