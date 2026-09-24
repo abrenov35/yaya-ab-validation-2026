@@ -2,7 +2,7 @@
 "use strict";
 
 var API="https://script.google.com/macros/s/AKfycbxXBpXjWXEF-7p6vvOE3blSBc8_5e62AtQb2stHjnrGE025cOxQGy-zAguYmN2u9O4K/exec";
-var state={data:null,page:"chantiers",selected:null,tab:"documents",query:"",loadedAt:null,source:"prod",statsYear:new Date().getFullYear(),overrides:{}};
+var state={data:null,page:"chantiers",selected:null,tab:"documents",query:"",loadedAt:null,source:"prod",statsYear:new Date().getFullYear(),commandOverrides:{},overrides:{}};
 var STATUTS=["Signé","À programmer","En cours","SAV","Attente PV","Facturé","Clos facturé","Archivé"];
 
 function esc(v){return String(v==null?"":v).replace(/[&<>"']/g,function(c){return({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]);});}
@@ -335,6 +335,24 @@ function rowsTable(headers,rows){
   rows.forEach(function(r){h+="<tr>"+r.join("")+"</tr>";});
   return h+"</tbody></table></div>";
 }
+function normalizeCommandeStatus(v){
+  var s=typeNorm(v);
+  if(s==="choice"||s.indexOf("attente choix")>=0||s.indexOf("choix client")>=0)return "choice";
+  if(s==="todo"||s.indexOf("a commander")>=0)return "todo";
+  if(s==="ordered"||s.indexOf("commande")>=0)return "ordered";
+  if(s==="received"||s.indexOf("recu")>=0)return "received";
+  return "choice";
+}
+function commandeStatusLabel(v){
+  var s=normalizeCommandeStatus(v);
+  return s==="todo"?"À commander":s==="ordered"?"Commandé":s==="received"?"Reçu":"Attente choix";
+}
+function commandeStatusSelect(o){
+  var id=String(o.id||"");
+  var current=state.commandOverrides[id]||normalizeCommandeStatus(o.statut||o.status);
+  var opts=[["choice","Attente choix"],["todo","À commander"],["ordered","Commandé"],["received","Reçu"]];
+  return '<select class="cmd-status-select" data-command-status="'+esc(id)+'">'+opts.map(function(x){return '<option value="'+x[0]+'" '+(x[0]===current?"selected":"")+'>'+x[1]+'</option>';}).join("")+'</select>';
+}
 function chantierTab(cid){
   if(state.tab==="documents"){
     var docs=docsFor(cid);if(!docs.length)return '<div class="empty">Aucun document ou mail pour ce chantier.</div>';
@@ -355,7 +373,15 @@ function chantierTab(cid){
   }
   if(state.tab==="commandes"){
     var co=rowsFor("commandes",cid);
-    return rowsTable(["Date","Fournisseur","Désignation","Statut","Montant"],co.map(function(r){return["<td>"+dateFr(r.date)+"</td>","<td class=\"strong\">"+esc(r.fournisseur)+"</td>","<td>"+esc(r.designation)+"</td>","<td>"+badgeStatus(r.statut||r.statutValidation)+"</td>","<td class=\"money\">"+eur(r.montantHT)+"</td>"];}));
+    return rowsTable(["Date","Fournisseur","Désignation","Statut","Montant"],co.map(function(r){
+      return[
+        "<td>"+dateFr(r.date)+"</td>",
+        "<td class=\"strong\">"+esc(r.fournisseur)+"</td>",
+        "<td>"+esc(r.designation)+"</td>",
+        "<td>"+commandeStatusSelect(r)+"</td>",
+        "<td class=\"money\">"+eur(r.montantHT)+"</td>"
+      ];
+    }));
   }
   if(state.tab==="photos"){
     var ph=rowsFor("documents",cid).filter(function(d){return typeNorm(d.type)==="photo";});
@@ -478,7 +504,17 @@ function genericTablePage(kind){
   var rows=[];
   if(kind==="achats")rows=activeRows(state.data.achats||[]).filter(function(r){return purchaseImpact(r)!==0;});
   if(kind==="charges")rows=activeRows(state.data.achats||[]).filter(isSub);
-  if(kind==="commandes")rows=state.data.commandes||[];
+  if(kind==="commandes"){
+    rows=state.data.commandes||[];
+    html='<div class="page-head"><div><h1>Commandes</h1><p>Suivi des commandes — modifications de statut simulées en TEST.</p></div></div>';
+    html+='<div class="panel"><div class="table-wrap"><table><thead><tr><th>Date</th><th>Chantier</th><th>Fournisseur</th><th>Désignation</th><th>Statut</th><th class="money">Montant</th></tr></thead><tbody>';
+    rows.forEach(function(r){
+      var ch=chantierById(r.chantierId);
+      html+='<tr><td>'+dateFr(r.date)+'</td><td class="strong">'+esc(ch?ch.nom:r.chantierId||"—")+'</td><td>'+esc(r.fournisseur||"—")+'</td><td>'+esc(r.designation||"")+'</td><td>'+commandeStatusSelect(r)+'</td><td class="money">'+eur(r.montantHT)+'</td></tr>';
+    });
+    html+='</tbody></table></div></div>';
+    return shell(html,"Commandes");
+  }
   if(kind==="devis")rows=state.data.DEVIS||[];
   if(kind==="heures")rows=(state.data.heures||[]).filter(function(h){return String(h.type)==="chantier";});
   html+='<div class="panel"><div class="panel-head"><h2>'+esc(title)+'</h2><span>'+rows.length+' ligne(s)</span></div><div class="empty">La vue globale est branchée. Le détail métier sera affiné après validation de la fiche chantier.</div></div>';
@@ -502,6 +538,12 @@ function bind(){
   document.querySelectorAll(".y2-open-doc").forEach(function(b){b.onclick=function(e){e.preventDefault();e.stopPropagation();openInternalDocument(b.getAttribute("data-doc-url"),b.getAttribute("data-doc-title"));};});
   document.querySelectorAll(".y2-open-mail").forEach(function(b){b.onclick=function(e){e.preventDefault();e.stopPropagation();var m=mailById(b.getAttribute("data-mail-id"));if(m)openMailViewer(m);};});
   var sy=document.getElementById("statsYear");if(sy){sy.onchange=function(){state.statsYear=Number(sy.value)||2026;render();};}
+  document.querySelectorAll("[data-command-status]").forEach(function(sel){
+    sel.onchange=function(e){
+      e.stopPropagation();
+      state.commandOverrides[sel.getAttribute("data-command-status")]=sel.value;
+    };
+  });
 }
 function normalizeData(data){
   data=data&&typeof data==="object"?data:{};
