@@ -12,6 +12,7 @@ function pct(v){return new Intl.NumberFormat("fr-FR",{maximumFractionDigits:1}).
 function dateFr(v){
   if(v==null||v==="")return "—";
   if(typeof v==="number"){
+    if(v>=1900&&v<=2200&&Math.floor(v)===v)return String(v);
     var d=new Date(Math.round((v-25569)*86400*1000));
     return isNaN(d)?String(v):d.toLocaleDateString("fr-FR");
   }
@@ -243,10 +244,10 @@ function dashboard(){
     .slice(0,12);
 
   var html=pageHead("Activité récente","Les derniers chantiers ayant réellement bougé dans Yaya.");
-  html+='<div class="panel"><div class="panel-head"><h2>Dernières activités</h2><span>'+recent.length+' chantier(s)</span></div><div class="table-wrap"><table><thead><tr><th>Chantier</th><th>Dernière activité</th><th>Date</th><th>Statut</th><th class="money">CA HT</th><th class="money">Marge</th></tr></thead><tbody>';
+  html+='<div class="panel"><div class="panel-head"><h2>Dernières activités</h2><span>'+recent.length+' chantier(s)</span></div><div class="table-wrap"><table><thead><tr><th>Chantier</th><th>Dernière activité</th><th>Date</th><th class="money">CA HT</th><th class="money">Marge</th></tr></thead><tbody>';
   recent.forEach(function(x){
     var c=x.chantier,v=chantierView(c),f=finances(c.id);
-    html+='<tr class="clickable" data-chantier="'+esc(c.id)+'"><td class="strong">'+esc(c.nom)+'</td><td><span class="badge">'+esc(x.activity.label)+'</span></td><td>'+dateFr(new Date(x.activity.ts).toISOString())+'</td><td>'+badgeStatus(v.statut)+'</td><td class="money">'+eur(f.ca)+'</td><td class="money '+(f.margin>=0?"margin-good":"margin-bad")+'">'+eur(f.margin)+'</td></tr>';
+    html+='<tr class="clickable" data-chantier="'+esc(c.id)+'"><td class="strong">'+esc(c.nom)+'</td><td><span class="badge">'+esc(x.activity.label)+'</span></td><td>'+dateFr(new Date(x.activity.ts).toISOString())+'</td><td class="money">'+eur(f.ca)+'</td><td class="money '+(f.margin>=0?"margin-good":"margin-bad")+'">'+eur(f.margin)+'</td></tr>';
   });
   html+="</tbody></table></div></div>";
   return shell(html,"Activité récente");
@@ -333,10 +334,8 @@ function chantierTab(cid){
 }
 function chantierPage(){
   var base=chantierById(state.selected);if(!base){state.page="chantiers";return chantierList();}
-  var c=chantierView(base),f=finances(base.id),options=STATUTS.slice();
-  if(c.statut&&options.indexOf(c.statut)<0)options.unshift(c.statut);
-  var select='<select class="sim-select" data-action="status" data-id="'+esc(c.id)+'">'+options.map(function(s){return '<option '+(s===c.statut?"selected":"")+'>'+esc(s)+'</option>';}).join("")+'</select>';
-  var html='<div class="chantier-head"><div class="chantier-top"><div><div class="chantier-name">'+esc(c.nom)+'</div><div class="chantier-id">'+esc(c.id)+(c.numero?" · "+esc(c.numero):"")+'</div></div><div class="sim-box">'+select+'<div class="sim-note">Simulation locale uniquement</div></div></div><div class="chantier-dates"><div><div class="meta-label">Démarrage</div><div class="meta-value">'+dateFr(c.dateDemarrage)+'</div></div><div><div class="meta-label">Signé le</div><div class="meta-value">'+dateFr(c.dateSignature)+'</div></div><div><div class="meta-label">Date statistique fixe</div><div class="meta-value">'+dateFr(c.dateSignatureFixe)+'</div></div><div><div class="meta-label">Source CA</div><div class="meta-value">Extranet</div></div></div></div>';
+  var c=chantierView(base),f=finances(base.id);
+  var html='<div class="chantier-head"><div class="chantier-top"><div><div class="chantier-name">'+esc(c.nom)+'</div><div class="chantier-id">'+(c.numero?esc(c.numero):"")+'</div></div></div><div class="chantier-dates"><div><div class="meta-label">Démarrage</div><div class="meta-value">'+dateFr(c.dateDemarrage)+'</div></div><div><div class="meta-label">Signé le</div><div class="meta-value">'+dateFr(c.dateSignature)+'</div></div></div></div>';
   html+='<div class="grid-kpi">'+kpi("CA HT",eur(f.ca),"Valeur maître Extranet")+kpi("Achats",eur(f.purchases),"Dépenses réelles")+kpi("Sous-traitance",eur(f.charges),"Factures sous-traitants")+kpi("Main-d’œuvre",eur(f.labor),String(f.hours).replace(".",",")+" h × 50 €")+kpi("Marge",eur(f.margin),"Après coûts",f.margin>=0?"margin-good":"margin-bad")+kpi("Marge %",pct(f.marginPct),"Sur CA HT",f.marginPct>=0?"margin-good":"margin-bad")+"</div>";
   html+='<div class="two-col"><section class="panel"><div class="tabs">'+tabButton("documents","Documents & mails")+tabButton("achats","Achats")+tabButton("charges","Charges")+tabButton("commandes","Commandes")+tabButton("photos","Photos")+tabButton("devis","Devis")+tabButton("heures","Heures")+'</div><div class="tab-body">'+chantierTab(c.id)+'</div></section>';
   html+='<aside class="panel side-panel"><div class="side-info"><h3>Lecture du chantier</h3><div class="side-row"><span class="muted">Documents & mails</span><strong>'+docsFor(c.id).length+'</strong></div><div class="side-row"><span class="muted">Commandes</span><strong>'+rowsFor("commandes",c.id).length+'</strong></div><div class="side-row"><span class="muted">Photos</span><strong>'+rowsFor("documents",c.id).filter(function(d){return typeNorm(d.type)==="photo";}).length+'</strong></div><div class="side-row"><span class="muted">Heures</span><strong>'+String(f.hours).replace(".",",")+' h</strong></div><div class="side-row"><span class="muted">Taux Yaya 2</span><strong>50 €/h</strong></div></div></aside></div>';
@@ -377,13 +376,6 @@ function bind(){
   document.querySelectorAll("[data-tab]").forEach(function(b){b.onclick=function(){state.tab=b.getAttribute("data-tab");render();};});
   document.querySelectorAll("[data-action=reload]").forEach(function(b){b.onclick=function(){load(true);};});
   var search=document.getElementById("searchChantiers");if(search){search.oninput=function(){state.query=search.value;var pos=search.selectionStart;render();var s=document.getElementById("searchChantiers");if(s){s.focus();try{s.setSelectionRange(pos,pos);}catch(e){}}};}
-  document.querySelectorAll("[data-action=status]").forEach(function(s){s.onchange=function(){var id=s.getAttribute("data-id");state.overrides[id]=Object.assign({},state.overrides[id]||{},{statut:s.value});render();};});
-  document.querySelectorAll(".y2-open-doc").forEach(function(b){
-    b.onclick=function(e){
-      e.preventDefault();e.stopPropagation();
-      openInternalDocument(b.getAttribute("data-doc-url"),b.getAttribute("data-doc-title"));
-    };
-  });
 }
 function normalizeData(data){
   data=data&&typeof data==="object"?data:{};
