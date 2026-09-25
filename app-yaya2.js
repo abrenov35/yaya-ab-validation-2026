@@ -451,38 +451,55 @@ function statsAvailableYears(){
   return Array.from(new Set(years.filter(function(y){return y>=2026&&y<=2100;}))).sort(function(a,b){return a-b;});
 }
 function statsPage(){
-  var short=["Janv.","Févr.","Mars","Avr.","Mai","Juin","Juil.","Août","Sept.","Oct.","Nov.","Déc."];
+  var months=["Janvier","Février","Mars","Avril","Mai","Juin","Juillet","Août","Septembre","Octobre","Novembre","Décembre"];
+  var short=["Janv.","Févr.","Mars","Avril","Mai","Juin","Juil.","Août","Sept.","Oct.","Nov.","Déc."];
   var years=statsAvailableYears();
   if(years.indexOf(Number(state.statsYear))<0)state.statsYear=years[years.length-1]||2026;
   var year=Number(state.statsYear)||2026;
   var cur=statsValues(year),prev=statsValues(year-1);
   var total=cur.amounts.reduce(function(a,b){return a+n(b);},0);
   var totalPrev=prev.amounts.reduce(function(a,b){return a+n(b);},0);
-  var evo=totalPrev?((total-totalPrev)/totalPrev*100):null;
-  var max=Math.max.apply(null,cur.amounts.concat([1]));
-  var axis=Math.max(50000,Math.ceil(max/50000)*50000);
+  var activeMonths=cur.amounts.filter(function(v){return n(v)>0;}).length;
+  var average=activeMonths?total/activeMonths:0;
+  var evolution=totalPrev?Math.round((total-totalPrev)/totalPrev*100):null;
+  var bestValue=Math.max.apply(null,cur.amounts.concat([0]));
+  var bestMonth=cur.amounts.indexOf(bestValue);
+  var axisMax=250000;
   var options=years.map(function(y){return '<option value="'+y+'" '+(y===year?"selected":"")+'>'+y+'</option>';}).join("");
 
-  var html='<div class="page-head evo-head"><div><h1>Évolution CA</h1></div><select class="sim-select" id="statsYear">'+options+'</select></div>';
-  html+='<div class="evo-summary"><div><span>CA signé HT '+year+'</span><strong>'+eur(total)+'</strong></div>';
-  if(evo!==null)html+='<div class="evo-compare"><span>vs '+(year-1)+'</span><strong class="'+(evo>=0?"margin-good":"margin-bad")+'">'+(evo>=0?"+":"")+pct(evo)+'</strong></div>';
+  var html='<div class="evo-yaya-head"><select class="sim-select" id="statsYear">'+options+'</select></div>';
+
+  html+='<div class="evo-yaya-kpis">';
+  html+='<div class="evo-yaya-kpi blue"><div class="evo-yaya-icon">€</div><div><span>CA SIGNÉ '+year+'</span><strong>'+eur(total)+'</strong></div></div>';
+  html+='<div class="evo-yaya-kpi orange"><div class="evo-yaya-icon">▥</div><div><span>MOYENNE MENSUELLE</span><strong>'+eur(average)+'</strong></div></div>';
+  html+='<div class="evo-yaya-kpi purple"><div class="evo-yaya-icon">◎</div><div><span>ÉVOLUTION / '+(year-1)+'</span><strong class="'+(evolution===null?"":evolution>=0?"margin-good":"margin-bad")+'">'+(evolution===null?"Base de départ":((evolution>0?"+":"")+evolution+" %"))+'</strong></div></div>';
   html+='</div>';
 
-  html+='<div class="panel stats-chart-panel"><div class="panel-head compact"><h2>CA signé par mois</h2><span>'+year+'</span></div><div class="stats-chart evo-chart">';
-  cur.amounts.forEach(function(v,i){
-    var h=v?Math.max(3,Math.round((n(v)/axis)*100)):0;
-    html+='<div class="stats-col"><div class="stats-bar-area"><div class="stats-value">'+(v?eur(v):"")+'</div><div class="stats-bar" style="height:'+h+'%"></div></div><div class="stats-month">'+short[i]+'</div></div>';
+  html+='<div class="panel evo-yaya-card"><div class="panel-head compact"><h2>Évolution mensuelle du CA signé HT — '+year+'</h2></div>';
+  html+='<div class="evo-yaya-chart"><div class="evo-yaya-yaxis">';
+  [250000,200000,150000,100000,50000,0].forEach(function(v){
+    html+='<span>'+Math.round(v/1000)+' k€</span>';
+  });
+  html+='</div><div class="evo-yaya-bars">';
+  short.forEach(function(m,i){
+    var value=n(cur.amounts[i]);
+    var h=Math.max(0,Math.min(100,value/axisMax*100));
+    var isBest=value>0&&i===bestMonth;
+    var showCount=(year>2026||(year===2026&&i>=8))&&n(cur.counts[i])>0;
+    html+='<div class="evo-yaya-month">';
+    html+='<div class="evo-yaya-barzone">';
+    if(value>0)html+='<div class="evo-yaya-value">'+eur(value)+'</div>';
+    if(isBest)html+='<div class="evo-yaya-star">★</div>';
+    html+='<div class="evo-yaya-bar'+(isBest?" best":"")+'" style="height:'+h+'%">';
+    if(showCount)html+='<span class="evo-yaya-count">'+cur.counts[i]+'</span>';
+    html+='</div></div><div class="evo-yaya-month-label">'+m+'</div></div>';
   });
   html+='</div></div>';
 
-  var cum=0,cumPrev=0;
-  html+='<div class="panel evo-cumul"><div class="panel-head compact"><h2>Cumul annuel</h2><span>'+year+'</span></div><div class="evo-cumul-grid">';
-  cur.amounts.forEach(function(v,i){
-    cum+=n(v);cumPrev+=n(prev.amounts[i]);
-    var d=cumPrev?((cum-cumPrev)/cumPrev*100):null;
-    html+='<div class="evo-cumul-row"><span>'+short[i]+'</span><strong>'+eur(cum)+'</strong>'+(d===null?'':('<em class="'+(d>=0?"margin-good":"margin-bad")+'">'+(d>=0?"+":"")+pct(d)+'</em>'))+'</div>';
-  });
+  html+='<div class="evo-yaya-legend"><span><i></i>'+year+'</span>';
+  if(bestValue>0)html+='<strong>★ Meilleur mois : '+months[bestMonth]+' · '+eur(bestValue)+'</strong>';
   html+='</div></div>';
+
   return shell(html,"Évolution CA");
 }
 function genericTablePage(kind){
