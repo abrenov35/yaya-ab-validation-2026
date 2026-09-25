@@ -196,6 +196,8 @@
   }
 
   function signatureCanonique(c){
+    const fixe=String(c&&c.dateSignatureFixe||'').trim().match(/^(\d{4}-\d{2})(?:-\d{2})?/);
+    if(fixe)return fixe[1];
     const marker=String(c&&c.notes||'').match(/\[\[YAYA_SIG:(\d{4}-\d{2})\]\]/);
     if(marker&&marker[1])return marker[1];
     const direct=String(c&&c.dateSignature||'').trim().match(/^(\d{4}-\d{2})/);
@@ -222,7 +224,10 @@
       if(!m||Number(m[1])!==year)return;
       const month=Number(m[2])-1;
       if(month<0||month>11)return;
-      const amount=typeof totalDevis==='function'?Number(totalDevis(c))||0:Number(c.montantMarcheHT||c.montantDevisHT)||0;
+      // Le marché HT synchronisé est la source du CA signé. Ne pas additionner
+      // les devis/avenants : ils peuvent déjà être inclus dans ce montant.
+      const marche=c.montantMarcheHT;
+      const amount=Number(marche!==null&&marche!==undefined&&marche!==''?marche:c.montantDevisHT)||0;
       montants[month]+=amount;
       nombres[month]++;
     });
