@@ -247,10 +247,10 @@ function shell(content,title){
   return '<div class="shell">'+
     '<aside class="sidebar"><div class="brand"><div class="brand-mark">AB</div><div><div class="brand-title">Yaya 2</div><div class="brand-sub">AB RENOV 35</div></div></div>'+
     '<nav class="nav">'+
-      navBtn("chantiers","Chantiers")+navBtn("documents","Documents & mails")+navBtn("achats","Achats")+navBtn("charges","Charges")+navBtn("commandes","Commandes")+navBtn("devis","Devis")+navBtn("heures","Heures")+navBtn("stats","CA signé")+
+      navBtn("chantiers","Chantiers")+navBtn("documents","Documents & mails")+navBtn("achats","Achats")+navBtn("charges","Charges")+navBtn("commandes","Commandes")+navBtn("devis","Devis")+navBtn("heures","Heures")+navBtn("stats","Évolution CA")+
     '</nav><div class="sidebar-foot"><span class="test-pill">MODE TEST</span><br>Lecture PROD uniquement.<br>Les modifications de cette session ne sont jamais envoyées à Yaya.</div></aside>'+
     '<main class="main"><header class="topbar"><div class="top-title">'+esc(title||"Yaya 2")+'</div><div class="top-meta"><span class="read-label"><span class="status-dot"></span>'+sourceLabel+'</span><button class="btn" data-action="reload">Actualiser</button></div></header><div class="content">'+content+'</div></main>'+
-    '<nav class="mobile-nav">'+navBtn("chantiers","Chantiers")+navBtn("heures","Heures")+navBtn("stats","CA signé")+'</nav>'+
+    '<nav class="mobile-nav">'+navBtn("chantiers","Chantiers")+navBtn("heures","Heures")+navBtn("stats","Évolution CA")+'</nav>'+
   '</div>';
 }
 function pageHead(title,sub,action){return '<div class="page-head"><div><h1>'+esc(title)+'</h1><p>'+esc(sub||"")+'</p></div>'+(action||"")+'</div>';}
@@ -451,7 +451,6 @@ function statsAvailableYears(){
   return Array.from(new Set(years.filter(function(y){return y>=2026&&y<=2100;}))).sort(function(a,b){return a-b;});
 }
 function statsPage(){
-  var months=["Janvier","Février","Mars","Avril","Mai","Juin","Juillet","Août","Septembre","Octobre","Novembre","Décembre"];
   var short=["Janv.","Févr.","Mars","Avr.","Mai","Juin","Juil.","Août","Sept.","Oct.","Nov.","Déc."];
   var years=statsAvailableYears();
   if(years.indexOf(Number(state.statsYear))<0)state.statsYear=years[years.length-1]||2026;
@@ -459,29 +458,32 @@ function statsPage(){
   var cur=statsValues(year),prev=statsValues(year-1);
   var total=cur.amounts.reduce(function(a,b){return a+n(b);},0);
   var totalPrev=prev.amounts.reduce(function(a,b){return a+n(b);},0);
-  var cum=0,cumPrev=0,max=Math.max.apply(null,cur.amounts.concat(year>2026?prev.amounts:[],[1]));
+  var evo=totalPrev?((total-totalPrev)/totalPrev*100):null;
+  var max=Math.max.apply(null,cur.amounts.concat([1]));
   var axis=Math.max(50000,Math.ceil(max/50000)*50000);
   var options=years.map(function(y){return '<option value="'+y+'" '+(y===year?"selected":"")+'>'+y+'</option>';}).join("");
-  var html=pageHead("CA signé","Évolution mensuelle du chiffre d’affaires signé HT.",'<select class="sim-select" id="statsYear">'+options+'</select>');
-  html+='<div class="stats-summary"><strong>'+eur(total)+'</strong><span>CA signé HT '+year+'</span>';
-  if(year>2026&&totalPrev)html+='<span>Année précédente : '+eur(totalPrev)+'</span>';
+
+  var html='<div class="page-head evo-head"><div><h1>Évolution CA</h1></div><select class="sim-select" id="statsYear">'+options+'</select></div>';
+  html+='<div class="evo-summary"><div><span>CA signé HT '+year+'</span><strong>'+eur(total)+'</strong></div>';
+  if(evo!==null)html+='<div class="evo-compare"><span>vs '+(year-1)+'</span><strong class="'+(evo>=0?"margin-good":"margin-bad")+'">'+(evo>=0?"+":"")+pct(evo)+'</strong></div>';
   html+='</div>';
-  html+='<div class="panel stats-chart-panel"><div class="panel-head"><h2>CA signé par mois — '+year+'</h2><span>Montant marché HT</span></div><div class="stats-chart">';
+
+  html+='<div class="panel stats-chart-panel"><div class="panel-head compact"><h2>CA signé par mois</h2><span>'+year+'</span></div><div class="stats-chart evo-chart">';
   cur.amounts.forEach(function(v,i){
-    var h=Math.max(2,Math.round((n(v)/axis)*100));
+    var h=v?Math.max(3,Math.round((n(v)/axis)*100)):0;
     html+='<div class="stats-col"><div class="stats-bar-area"><div class="stats-value">'+(v?eur(v):"")+'</div><div class="stats-bar" style="height:'+h+'%"></div></div><div class="stats-month">'+short[i]+'</div></div>';
   });
   html+='</div></div>';
-  html+='<div class="panel"><div class="panel-head"><h2>Détail mensuel</h2><span>'+(year===2026?"Janvier à août : historique Yaya":"Comparaison annuelle")+'</span></div><div class="table-wrap"><table><thead><tr><th>Mois</th><th class="money">CA HT mois</th><th class="money">Cumul '+year+'</th>'+(year>2026?'<th class="money">Cumul '+(year-1)+'</th><th class="money">Évolution</th>':'')+'</tr></thead><tbody>';
-  months.forEach(function(m,i){
-    cum+=n(cur.amounts[i]);cumPrev+=n(prev.amounts[i]);
-    var evo=cumPrev?((cum-cumPrev)/cumPrev*100):null;
-    html+='<tr><td class="strong">'+m+(year===2026&&i<8&&cur.manual[i]!==null?' <span class="badge">historique</span>':'')+'</td><td class="money">'+eur(cur.amounts[i])+'</td><td class="money strong">'+eur(cum)+'</td>';
-    if(year>2026)html+='<td class="money">'+eur(cumPrev)+'</td><td class="money">'+(evo===null?"—":pct(evo))+'</td>';
-    html+='</tr>';
+
+  var cum=0,cumPrev=0;
+  html+='<div class="panel evo-cumul"><div class="panel-head compact"><h2>Cumul annuel</h2><span>'+year+'</span></div><div class="evo-cumul-grid">';
+  cur.amounts.forEach(function(v,i){
+    cum+=n(v);cumPrev+=n(prev.amounts[i]);
+    var d=cumPrev?((cum-cumPrev)/cumPrev*100):null;
+    html+='<div class="evo-cumul-row"><span>'+short[i]+'</span><strong>'+eur(cum)+'</strong>'+(d===null?'':('<em class="'+(d>=0?"margin-good":"margin-bad")+'">'+(d>=0?"+":"")+pct(d)+'</em>'))+'</div>';
   });
-  html+='</tbody></table></div></div>';
-  return shell(html,"CA signé");
+  html+='</div></div>';
+  return shell(html,"Évolution CA");
 }
 function genericTablePage(kind){
   var title=kind.charAt(0).toUpperCase()+kind.slice(1),html=pageHead(title,"Vue globale de contrôle — lecture PROD.");
