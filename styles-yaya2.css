@@ -178,3 +178,48 @@ tr.clickable{cursor:pointer}tr.clickable:hover td{background:#f8fafb}
   .evo-cumul-grid{grid-template-columns:1fr}
   .evo-cumul-row{grid-template-columns:48px 1fr auto}
 }
+
+.evo-yaya-head{display:flex;justify-content:flex-end;margin-bottom:10px}
+.evo-yaya-kpis{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin-bottom:12px}
+.evo-yaya-kpi{display:flex;align-items:center;gap:14px;border:1px solid var(--line);border-radius:14px;padding:14px 16px;background:#fff;min-height:84px}
+.evo-yaya-kpi.blue{background:linear-gradient(135deg,#fff,#edf6ff)}
+.evo-yaya-kpi.orange{background:linear-gradient(135deg,#fff,#fff7e8)}
+.evo-yaya-kpi.purple{background:linear-gradient(135deg,#fff,#f6f2ff)}
+.evo-yaya-icon{width:46px;height:46px;border-radius:13px;display:grid;place-items:center;color:#fff;font-weight:900;font-size:20px;flex:0 0 auto}
+.evo-yaya-kpi.blue .evo-yaya-icon{background:linear-gradient(145deg,#2890ff,#1457bd)}
+.evo-yaya-kpi.orange .evo-yaya-icon{background:linear-gradient(145deg,#ffac25,#ef7c00)}
+.evo-yaya-kpi.purple .evo-yaya-icon{background:linear-gradient(145deg,#8f73ef,#6546c6)}
+.evo-yaya-kpi span{display:block;font-size:10.5px;font-weight:850;letter-spacing:.04em;color:#38516a;margin-bottom:5px}
+.evo-yaya-kpi strong{display:block;font-size:25px;line-height:1;font-weight:850;color:#16324f}
+.evo-yaya-card{overflow:hidden}
+.evo-yaya-chart{display:grid;grid-template-columns:54px 1fr;min-height:360px;padding:14px 12px 8px}
+.evo-yaya-yaxis{display:flex;flex-direction:column;justify-content:space-between;align-items:flex-end;padding:0 8px 32px 0;color:#71849a;font-size:9px}
+.evo-yaya-bars{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));gap:8px;align-items:end;min-height:330px;border-left:1px solid #dfe6ed;border-bottom:1px solid #dfe6ed;background:repeating-linear-gradient(to bottom,transparent 0,transparent calc(20% - 1px),#edf1f5 calc(20% - 1px),#edf1f5 20%)}
+.evo-yaya-month{display:grid;grid-template-rows:1fr 26px;height:100%;min-width:0}
+.evo-yaya-barzone{position:relative;display:flex;align-items:flex-end;justify-content:center;padding:28px 2px 0}
+.evo-yaya-bar{width:62%;max-width:42px;min-width:12px;background:linear-gradient(180deg,#2f98ff,#1769d3);border-radius:5px 5px 0 0;position:relative;box-shadow:0 2px 5px rgba(23,105,211,.16)}
+.evo-yaya-bar.best{background:linear-gradient(180deg,#27c3b0,#0e9a87)}
+.evo-yaya-value{position:absolute;bottom:calc(var(--dummy,0px) + 100%);top:4px;left:50%;transform:translateX(-50%);font-size:9px;font-weight:800;color:#17324f;white-space:nowrap}
+.evo-yaya-star{position:absolute;top:17px;font-size:13px;color:#11a28c}
+.evo-yaya-count{position:absolute;inset:0;display:grid;place-items:center;color:#fff;font-size:13px;font-weight:900;text-shadow:0 1px 2px rgba(0,0,0,.25)}
+.evo-yaya-month-label{display:flex;align-items:flex-end;justify-content:center;font-size:9px;color:#52667a;padding-bottom:2px;white-space:nowrap;overflow:hidden}
+.evo-yaya-legend{display:flex;align-items:center;gap:14px;padding:0 14px 12px;font-size:10px;color:#6c7d8d}
+.evo-yaya-legend span{display:flex;align-items:center;gap:6px}
+.evo-yaya-legend i{width:9px;height:9px;border-radius:50%;background:#2187ed;display:inline-block}
+.evo-yaya-legend strong{margin-left:auto;color:#07816f;font-size:10px}
+
+@media(max-width:820px){
+  .evo-yaya-kpis{grid-template-columns:1fr}
+  .evo-yaya-kpi{min-height:68px;padding:10px 12px}
+  .evo-yaya-icon{width:38px;height:38px;border-radius:10px;font-size:16px}
+  .evo-yaya-kpi strong{font-size:20px}
+  .evo-yaya-chart{grid-template-columns:34px 1fr;min-height:290px;padding:8px 4px 6px}
+  .evo-yaya-yaxis{padding-right:3px;font-size:7px}
+  .evo-yaya-bars{gap:2px;min-height:270px}
+  .evo-yaya-bar{width:78%;min-width:4px;border-radius:3px 3px 0 0}
+  .evo-yaya-value{font-size:6px;transform:translateX(-50%) rotate(-90deg);transform-origin:center;top:12px}
+  .evo-yaya-star{font-size:9px;top:18px}
+  .evo-yaya-count{font-size:10px}
+  .evo-yaya-month-label{font-size:6.5px}
+  .evo-yaya-legend strong{display:none}
+}
