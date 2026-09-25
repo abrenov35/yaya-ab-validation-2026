@@ -22,6 +22,20 @@ function dateFr(v){
   var d3=new Date(s);return isNaN(d3)?s:d3.toLocaleDateString("fr-FR");
 }
 
+function signaturePeriodLabel(c){
+  var raw=String((c&&c.dateSignatureFixe)||(c&&c.dateSignature)||"").trim();
+  if(!raw)return "—";
+  var m=raw.match(/^(\d{4})-(\d{2})/);
+  if(m){
+    var labels=["Janv.","Févr.","Mars","Avr.","Mai","Juin","Juil.","Août","Sept.","Oct.","Nov.","Déc."];
+    var month=Number(m[2])-1;
+    if(month>=0&&month<12)return labels[month]+" "+m[1];
+  }
+  var y=raw.match(/^(\d{4})$/);
+  if(y)return y[1];
+  return dateFr(raw);
+}
+
 var pdfJsPromise=null;
 function driveIdFromUrl(value){
   var s=String(value||"").trim(),m=s.match(/drive\.google\.com\/file\/d\/([^/?#]+)/i);
