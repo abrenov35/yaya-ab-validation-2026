@@ -8,6 +8,49 @@
     return {bg:'#FEF2F2', fg:'#B91C1C'};
   }
 
+  // KPI "% marge" : palette validée.
+  // > 10 % = vert soutenu ; 0 à 10 % = bleu franc ; < 0 % = rose framboise.
+  function kpiMarginPalette(pct){
+    if(pct<0) return {bg:'#FDF2F8', fg:'#BE185D', border:'#F9A8D4'};
+    if(pct<=10) return {bg:'#EFF6FF', fg:'#2563EB', border:'#93C5FD'};
+    return {bg:'#F0FDF4', fg:'#15803D', border:'#86EFAC'};
+  }
+
+  function parsePct(text){
+    const m=String(text||'').replace(/\u00a0/g,' ').match(/(-?\d+(?:[.,]\d+)?)\s*%/);
+    if(!m)return NaN;
+    return parseFloat(m[1].replace(',','.'));
+  }
+
+  function applyMarginKpiColors(){
+    const pane=document.getElementById('pane-chantiers');
+    if(!pane)return;
+
+    pane.querySelectorAll('.kpis .stat, .kpi, [data-kpi]').forEach(function(card){
+      const labelEl=card.querySelector('small,.label,.kpi-label,[data-kpi-label]');
+      const label=String(labelEl?labelEl.textContent:'').trim().toLowerCase();
+      const explicitMargin=String(card.getAttribute('data-kpi')||'').toLowerCase();
+      const isMarginPct=/^%\s*marge$/.test(label)
+        || /^marge\s*%$/.test(label)
+        || /taux\s+de\s+marge/.test(label)
+        || /margin/.test(explicitMargin)
+        || /marge/.test(explicitMargin);
+      if(!isMarginPct)return;
+
+      const pct=parsePct(card.textContent);
+      if(!Number.isFinite(pct))return;
+
+      const p=kpiMarginPalette(pct);
+      card.style.setProperty('background',p.bg,'important');
+      card.style.setProperty('border-color',p.border,'important');
+      card.style.setProperty('box-shadow','none','important');
+
+      card.querySelectorAll('b,strong,.value,.kpi-value,.sub').forEach(function(el){
+        el.style.setProperty('color',p.fg,'important');
+      });
+    });
+  }
+
   function applyMarginBadgeColors(){
     const pane=document.getElementById('pane-chantiers');
     if(!pane)return;
@@ -41,20 +84,35 @@
     });
   }
 
+  function applyAllMarginColors(){
+    applyMarginBadgeColors();
+    applyMarginKpiColors();
+  }
+
   const oldRender=window.renderChantiers;
   if(typeof oldRender==='function'&&!oldRender.__yayaMarginColors){
     const wrapped=function(){
       const r=oldRender.apply(this,arguments);
-      applyMarginBadgeColors();
+      applyAllMarginColors();
       return r;
     };
     wrapped.__yayaMarginColors=true;
     window.renderChantiers=wrapped;
   }
 
-  setTimeout(applyMarginBadgeColors,50);
-  setTimeout(applyMarginBadgeColors,400);
-  setTimeout(applyMarginBadgeColors,1200);
+  let raf=0;
+  const observer=new MutationObserver(function(){
+    if(raf)return;
+    raf=requestAnimationFrame(function(){
+      raf=0;
+      applyMarginKpiColors();
+    });
+  });
+  observer.observe(document.documentElement,{childList:true,subtree:true,characterData:true});
+
+  setTimeout(applyAllMarginColors,50);
+  setTimeout(applyAllMarginColors,400);
+  setTimeout(applyAllMarginColors,1200);
 })();
 
 // Harmonisation fiche chantier : « Dépenses » devient « Achats » dans l'interface.
