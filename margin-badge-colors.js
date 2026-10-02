@@ -138,10 +138,29 @@
   }
 
   function applyMarginKpiColors(){
-    const pane=document.getElementById('pane-chantiers');
-    if(!pane)return;
+    // Recherche globale : certains écrans KPI ne sont pas rendus dans #pane-chantiers
+    // et n'utilisent pas toujours les classes .kpis/.stat.
+    const candidates=new Set();
 
-    pane.querySelectorAll('.kpis .stat, .kpi, [data-kpi]').forEach(function(card){
+    document.querySelectorAll('.kpis .stat, .kpi, [data-kpi]').forEach(function(el){
+      candidates.add(el);
+    });
+
+    document.querySelectorAll('small,.label,.kpi-label,[data-kpi-label],div,span').forEach(function(labelEl){
+      const label=String(labelEl.textContent||'').replace(/\\s+/g,' ').trim().toLowerCase();
+      if(label!=='% marge' && label!=='marge %' && label!=='taux de marge')return;
+
+      let card=labelEl.parentElement;
+      for(let i=0;i<4 && card;i++,card=card.parentElement){
+        const txt=String(card.textContent||'');
+        if(/-?\\d+(?:[.,]\\d+)?\\s*%/.test(txt)){
+          candidates.add(card);
+          break;
+        }
+      }
+    });
+
+    candidates.forEach(function(card){
       const labelEl=card.querySelector('small,.label,.kpi-label,[data-kpi-label]');
       const label=String(labelEl?labelEl.textContent:'').trim().toLowerCase();
       const explicitMargin=String(card.getAttribute('data-kpi')||'').toLowerCase();
@@ -157,12 +176,15 @@
 
       const p=kpiMarginPalette(pct);
       card.style.setProperty('background',p.bg,'important');
+      card.style.setProperty('background-color',p.bg,'important');
       card.style.setProperty('border-color',p.border,'important');
       card.style.setProperty('box-shadow','none','important');
 
       card.querySelectorAll('b,strong,.value,.kpi-value,.sub').forEach(function(el){
         el.style.setProperty('color',p.fg,'important');
       });
+      const labelNode=card.querySelector('small,.label,.kpi-label,[data-kpi-label]');
+      if(labelNode)labelNode.style.setProperty('color',p.fg,'important');
     });
   }
 
